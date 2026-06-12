@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchMessages, markAsSeen, setActiveUser } from "../redux/chatSlice";
+import { fetchMessages, markAsSeen } from "../redux/chatSlice";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import { getSocket } from "../services/socket";

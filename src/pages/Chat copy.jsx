@@ -1,66 +1,107 @@
-import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import Sidebar from '../components/Sidebar';
-import ChatWindow from '../components/ChatWindow';
-import { connectSocket, getSocket } from '../services/socket';
-import { setOnlineUsers } from '../redux/usersSlice';
-import { receiveMessage, setTypingStatus } from '../redux/chatSlice';
+import React, { useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import Sidebar from "../components/Sidebar";
+import ChatWindow from "../components/ChatWindow";
+import { connectSocket, getSocket } from "../services/socket";
+import { setOnlineUsers, fetchUsers } from "../redux/usersSlice";
+import {
+  markMessagesSeen,
+  receiveMessage,
+  removeMessage,
+  setTypingStatus,
+} from "../redux/chatSlice";
 
 const Chat = () => {
-    const dispatch = useDispatch();
-    const { user } = useSelector((state) => state.auth);
-    
+  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
+  const { list: users } = useSelector((state) => state.users);
 
-    useEffect(() => {
-        if (!user) return;
+  // Store latest users list in ref to avoid re-binding socket listeners when list updates
+  const usersRef = useRef(users);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
 
-        // 1. Initialize global web socket communication interface
-        const socket = connectSocket(user.id);
-        console.log("[Socket] Initialized connectSocket for user.id:", user.id);
+  useEffect(() => {
+    if (!user) return;
 
-        // 2. Set up global real-time event signal response listeners
-        socket.on('connect', () => {
-            console.log("[Socket] Connected successfully. Socket ID:", socket.id);
-        });
+    // 1. Initialize global web socket communication interface
+    const socket = connectSocket(user);
+    console.log("[Socket] Initialized connectSocket for user:", user);
 
-        socket.on('connect_error', (error) => {
-            console.error("[Socket] Connection error:", error);
-        });
+    // 2. Set up global real-time event signal response listeners
+    socket.on("connect", () => {
+      console.log("[Socket] Connected successfully. Socket ID:", socket.id);
+    });
 
-        socket.on('getOnlineUsers', (userIdsList) => {
-            console.log("[Socket] Received online users list:", userIdsList);
-            dispatch(setOnlineUsers(userIdsList));
-        });
+    socket.on("connect_error", (error) => {
+      console.error("[Socket] Connection error:", error);
+    });
 
-        socket.on('getMessage', (incomingMessage) => {
-            console.log("[Socket] Received getMessage event:", incomingMessage);
-            dispatch(receiveMessage(incomingMessage));
-        });
+    socket.on("getOnlineUsers", (userIdsList) => {
+      console.log("[Socket] Received online users list:", userIdsList);
+      dispatch(setOnlineUsers(userIdsList));
+    });
 
-        socket.on('userTyping', ({ senderId, isTyping }) => {
-            dispatch(setTypingStatus({ senderId, isTyping }));
-        });
+    socket.on("messageSeenAck", (data) => {
+      console.log("[Socket] Received messageSeenAck event. Data:", data);
+      dispatch(markMessagesSeen(data));
+    });
 
-        // 3. React cleanup execution hook layer
-        return () => {
-            console.log("[Socket] Cleaning up listeners");
-            socket.off('connect');
-            socket.off('connect_error');
-            socket.off('getOnlineUsers');
-            socket.off('getMessage');
-            socket.off('userTyping');
-        };
-    }, [user, dispatch]);
+    socket.on("userJoined", (newUser) => {
+      console.log("[Socket] Received userJoined event:", newUser);
+      const exists = usersRef.current.some((u) => u.id === newUser.id);
+      if (!exists) {
+        console.log(
+          "[Socket] New user not found in local list. Fetching updated user roster.",
+        );
+        dispatch(fetchUsers());
+      }
+    });
 
-    return (
-        <div className="w-full h-screen overflow-hidden flex bg-slate-900 select-none">
-            {/* Left Workspace Panel: Sidebar Nav */}
-            <Sidebar />
+    socket.on("getMessage", (incomingMessage) => {
+      console.log("[Socket] Received getMessage event:", incomingMessage);
+      dispatch(receiveMessage(incomingMessage));
+    });
 
-            {/* Right Workspace Panel: Active Conversation Stream Content Viewport Dashboard */}
-            <ChatWindow />
-        </div>
-    );
+    socket.on("userTyping", ({ senderId, isTyping }) => {
+      dispatch(setTypingStatus({ senderId, isTyping }));
+    });
+
+    socket.on("friendRequestAccepted", (data) => {
+      console.log("[Socket] Friend request accepted by other user:", data);
+      dispatch(fetchUsers());
+    });
+
+    socket.on("friendRequestReceived", (data) => {
+      console.log("[Socket] Friend request received from user:", data);
+    });
+
+    socket.on("messageDeletedForEveryone", ({ messageId }) => {
+      console.log("[Socket] Message deleted for everyone:", messageId);
+      dispatch(removeMessage({ messageId }));
+    });
+
+    return () => {
+      console.log("[Socket] Cleaning up listeners");
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.off("getOnlineUsers");
+      socket.off("userJoined");
+      socket.off("getMessage");
+      socket.off("userTyping");
+      socket.off("friendRequestAccepted");
+      socket.off("friendRequestReceived");
+      socket.off("messageDeletedForEveryone");
+    };
+  }, [user, dispatch]);
+
+  return (
+    <div className="w-full h-screen overflow-hidden flex bg-[#0a0a10] select-none">
+      <Sidebar />
+      <ChatWindow />
+    </div>
+  );
 };
 
 export default Chat;

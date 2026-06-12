@@ -80,7 +80,6 @@ const chatSlice = createSlice({
     isTyping: false, // Tracks if active user is typing to you
     loading: false,
     unreadCounts: {}, // Track real-time unread badge counts for each sender
-    typingUsers: {}, // key: senderId, value: boolean
   },
   reducers: {
     // Change current conversation focus target
@@ -92,6 +91,8 @@ const chatSlice = createSlice({
       ) {
         state.activeUser = action.payload;
         state.messages = [];
+        // state.isTyping = false;
+        state.typingUserId = null;
       }
       // Reset unread count for the opened chat
       if (action.payload) {
@@ -115,9 +116,24 @@ const chatSlice = createSlice({
       }
     },
     // Update typing indicator state flag dynamically
+    // setTypingStatus: (state, action) => {
+    //   if (
+    //     state.activeUser &&
+    //     String(action.payload.senderId) === String(state.activeUser.id)
+    //   ) {
+    //     state.isTyping = action.payload.isTyping;
+    //   }
+    // },
     setTypingStatus: (state, action) => {
       const { senderId, isTyping } = action.payload;
-      state.typingUsers[String(senderId)] = isTyping;
+      if (isTyping) {
+        state.typingUserId = String(senderId); // store WHO is typing
+      } else {
+        // Only clear if the same person stopped typing
+        if (String(state.typingUserId) === String(senderId)) {
+          state.typingUserId = null;
+        }
+      }
     },
     // Add markMessagesSeen Reducer
     markMessagesSeen: (state, action) => {

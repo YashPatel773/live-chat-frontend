@@ -15,8 +15,7 @@ export const fetchMessages = createAsyncThunk(
     }
   },
 );
-
-// 2. ASYNC ACTION: Post a new message out to Laravel API
+ 
 export const sendNewMessage = createAsyncThunk(
   "chat/sendNewMessage",
   async ({ receiverId, message }, { rejectWithValue }) => {
@@ -60,18 +59,6 @@ export const markAsSeen = createAsyncThunk(
   },
 );
 
-export const deleteMessage = createAsyncThunk(
-  "chat/deleteMessage",
-  async ({ messageId, type }, { rejectWithValue }) => {
-    try {
-      await api.delete(`/messages/${messageId}`, { data: { type } });
-      return { messageId, type };
-    } catch (error) {
-      return rejectWithValue(error.response?.data || "Delete failed");
-    }
-  },
-);
-
 const chatSlice = createSlice({
   name: "chat",
   initialState: {
@@ -80,7 +67,6 @@ const chatSlice = createSlice({
     isTyping: false, // Tracks if active user is typing to you
     loading: false,
     unreadCounts: {}, // Track real-time unread badge counts for each sender
-    typingUsers: {}, // key: senderId, value: boolean
   },
   reducers: {
     // Change current conversation focus target
@@ -92,6 +78,7 @@ const chatSlice = createSlice({
       ) {
         state.activeUser = action.payload;
         state.messages = [];
+        state.isTyping = false;
       }
       // Reset unread count for the opened chat
       if (action.payload) {
@@ -116,8 +103,12 @@ const chatSlice = createSlice({
     },
     // Update typing indicator state flag dynamically
     setTypingStatus: (state, action) => {
-      const { senderId, isTyping } = action.payload;
-      state.typingUsers[String(senderId)] = isTyping;
+      if (
+        state.activeUser &&
+        String(action.payload.senderId) === String(state.activeUser.id)
+      ) {
+        state.isTyping = action.payload.isTyping;
+      }
     },
     // Add markMessagesSeen Reducer
     markMessagesSeen: (state, action) => {
@@ -150,22 +141,10 @@ const chatSlice = createSlice({
         );
       }
     },
-    removeMessage: (state, action) => {
-      // action.payload = { messageId, type }
-      // 'everyone' removes for both sides, 'me' only removes locally
-      state.messages = state.messages.filter(
-        (msg) => msg.id !== action.payload.messageId,
-      );
-    },
   },
 
   extraReducers: (builder) => {
     builder
-      .addCase(deleteMessage.fulfilled, (state, action) => {
-        state.messages = state.messages.filter(
-          (msg) => msg.id !== action.payload.messageId,
-        );
-      })
 
       .addCase(fetchMessages.pending, (state) => {
         state.loading = true;
@@ -189,6 +168,5 @@ export const {
   receiveMessage,
   setTypingStatus,
   markMessagesSeen,
-  removeMessage,
 } = chatSlice.actions;
 export default chatSlice.reducer;

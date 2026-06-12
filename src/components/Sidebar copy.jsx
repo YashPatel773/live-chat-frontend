@@ -21,13 +21,9 @@ const Sidebar = () => {
     onlineUserIds,
     loading,
   } = useSelector((state) => state.users);
-  const { activeUser, unreadCounts, typingUsers } = useSelector(
-    (state) => state.chat,
-  );
-
+  const { activeUser, unreadCounts } = useSelector((state) => state.chat);
   const { user: currentUser } = useSelector((state) => state.auth);
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
-
   console.log({ users });
 
   const handleFriendAdded = () => {
@@ -191,6 +187,7 @@ const Sidebar = () => {
                   />
                 </div>
 
+                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p
                     className={`text-[13.5px] font-semibold truncate ${isSelected ? "text-violet-50" : "text-slate-200"}`}
@@ -200,13 +197,7 @@ const Sidebar = () => {
                   <p
                     className={`text-[11px] mt-0.5 font-medium ${isOnline ? "text-emerald-400" : "text-slate-500"}`}
                   >
-                    {/* {isTyping && activeUser?.id === user.id ? "Typing..." : isOnline ? "● Online" : "Offline"} */}
-                    {typingUsers?.[String(user.id)] &&
-                    activeUser?.id !== user.id
-                      ? "Typing..."
-                      : isOnline
-                        ? "● Online"
-                        : "Offline"}
+                    {isOnline ? "● Online" : "Offline"}
                   </p>
                 </div>
                 {!isSelected && badgeLabel && (

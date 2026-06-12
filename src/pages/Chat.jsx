@@ -7,6 +7,7 @@ import { setOnlineUsers, fetchUsers } from "../redux/usersSlice";
 import {
   markMessagesSeen,
   receiveMessage,
+  removeMessage,
   setTypingStatus,
 } from "../redux/chatSlice";
 
@@ -51,7 +52,9 @@ const Chat = () => {
       console.log("[Socket] Received userJoined event:", newUser);
       const exists = usersRef.current.some((u) => u.id === newUser.id);
       if (!exists) {
-        console.log("[Socket] New user not found in local list. Fetching updated user roster.");
+        console.log(
+          "[Socket] New user not found in local list. Fetching updated user roster.",
+        );
         dispatch(fetchUsers());
       }
     });
@@ -65,7 +68,20 @@ const Chat = () => {
       dispatch(setTypingStatus({ senderId, isTyping }));
     });
 
-    // 3. React cleanup execution hook layer
+    socket.on("friendRequestAccepted", (data) => {
+      console.log("[Socket] Friend request accepted by other user:", data);
+      dispatch(fetchUsers());
+    });
+
+    socket.on("friendRequestReceived", (data) => {
+      console.log("[Socket] Friend request received from user:", data);
+    });
+
+    socket.on("messageDeletedForEveryone", ({ messageId }) => {
+      console.log("[Socket] Message deleted for everyone:", messageId);
+      dispatch(removeMessage({ messageId }));
+    });
+
     return () => {
       console.log("[Socket] Cleaning up listeners");
       socket.off("connect");
@@ -74,6 +90,9 @@ const Chat = () => {
       socket.off("userJoined");
       socket.off("getMessage");
       socket.off("userTyping");
+      socket.off("friendRequestAccepted");
+      socket.off("friendRequestReceived");
+      socket.off("messageDeletedForEveryone");
     };
   }, [user, dispatch]);
 
