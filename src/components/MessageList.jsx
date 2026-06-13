@@ -58,6 +58,9 @@ const MessageList = () => {
 
   // Right-click or long-press handler
   const handleContextMenu = (e, msg) => {
+    if (msg.status === "pending" || String(msg.id).startsWith("temp-")) {
+      return;
+    }
     e.preventDefault();
     const isMine = String(msg.sender_id) === String(currentUser?.id);
     setContextMenu({
@@ -162,18 +165,39 @@ const MessageList = () => {
                 >
                   {formatTime(msg.created_at)}
                 </span>
-                {isSentByMe && (
-                  <span
-                    title={msg.is_seen ? "Seen" : "Sent"}
-                    className={`text-[12px] font-bold leading-none ${
-                      msg.is_seen
-                        ? "text-sky-400 drop-shadow-[0_0_4px_rgba(56,189,248,0.6)]"
-                        : "text-violet-300/40"
-                    }`}
-                  >
-                    {msg.is_seen ? "✓✓" : "✓"}
-                  </span>
-                )}
+                {isSentByMe &&
+                  (msg.status === "pending" ||
+                  String(msg.id).startsWith("temp-") ? (
+                    <span
+                      title="Sending..."
+                      className="text-violet-300/60 flex items-center justify-center animate-pulse"
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 15 12" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span
+                      title={msg.is_seen ? "Seen" : "Sent"}
+                      className={`text-[12px] font-bold leading-none ${
+                        msg.is_seen
+                          ? "text-sky-400 drop-shadow-[0_0_4px_rgba(56,189,248,0.6)]"
+                          : "text-violet-300/40"
+                      }`}
+                    >
+                      {msg.is_seen ? "✓✓" : "✓"}
+                    </span>
+                  ))}
               </div>
             </div>
           </div>
@@ -181,7 +205,7 @@ const MessageList = () => {
       })}
 
       {activeUser && typingUsers?.[String(activeUser.id)] && (
-        <div className="py-2 w-[80px] mt-10"> 
+        <div className="py-2 w-[80px] mt-10">
           <div className="gap-2 px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06]">
             <div className="flex gap-1">
               <span className="w-2 h-2 bg-violet-400 rounded-full animate-bounce" />

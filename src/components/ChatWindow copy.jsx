@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchMessages, markAsSeen } from "../redux/chatSlice";
+import { fetchMessages, markAsSeen, setActiveUser } from "../redux/chatSlice";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import { getSocket } from "../services/socket";
@@ -10,10 +10,6 @@ const ChatWindow = () => {
   const { activeUser, isTyping, loading, messages } = useSelector(
     (state) => state.chat,
   );
-
-  console.log({ activeUser });
-
-  console.log({ isTyping });
 
   const { user } = useSelector((state) => state.auth);
   const { onlineUserIds } = useSelector((state) => state.users);
@@ -118,6 +114,11 @@ const ChatWindow = () => {
             <p className="text-[14.5px] font-bold text-violet-50 tracking-wide leading-tight">
               {activeUser.name}
             </p>
+            <span
+              className={`text-[11px] mt-0.5 font-medium ${isActiveUserOnline ? "text-emerald-400" : "text-slate-500"}`}
+            >
+              {isActiveUserOnline ? "Online" : "Offline"}
+            </span>
           </div>
         </div>
 

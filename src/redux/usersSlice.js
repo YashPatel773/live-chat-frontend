@@ -24,6 +24,13 @@ const usersSlice = createSlice({
         // Triggered dynamically whenever Node.js broadcasts the 'getOnlineUsers' event
         setOnlineUsers: (state, action) => {
             state.onlineUserIds = action.payload;
+        },
+        updateUserLastSeen: (state, action) => {
+            const { userId, last_seen } = action.payload;
+            const user = state.list.find((u) => String(u.id) === String(userId));
+            if (user) {
+                user.last_seen = last_seen;
+            }
         }
     },
     extraReducers: (builder) => {
@@ -37,5 +44,5 @@ const usersSlice = createSlice({
     }
 });
 
-export const { setOnlineUsers } = usersSlice.actions;
+export const { setOnlineUsers, updateUserLastSeen } = usersSlice.actions;
 export default usersSlice.reducer;

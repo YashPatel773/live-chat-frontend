@@ -5,24 +5,63 @@ import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import { getSocket } from "../services/socket";
 
+const formatLastSeen = (lastSeenStr) => {
+  if (!lastSeenStr) return "Offline";
+  try {
+    const d = new Date(lastSeenStr);
+    if (isNaN(d.getTime())) return "Offline";
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const timeStr = d.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const itemDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    if (itemDate.getTime() === today.getTime()) {
+      return `last seen today at ${timeStr}`;
+    } else if (itemDate.getTime() === yesterday.getTime()) {
+      return `last seen yesterday at ${timeStr}`;
+    } else {
+      const dateStr = d.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      return `last seen on ${dateStr} at ${timeStr}`;
+    }
+  } catch (e) {
+    return "Offline";
+  }
+};
+
 const ChatWindow = () => {
   const dispatch = useDispatch();
-  const { activeUser, isTyping, loading, messages } = useSelector(
-    (state) => state.chat,
-  );
-
-  console.log({ activeUser });
-
-  console.log({ isTyping });
+  const {
+    activeUser: selectedUser,
+    loading,
+    messages,
+    typingUsers,
+  } = useSelector((state) => state.chat);
 
   const { user } = useSelector((state) => state.auth);
-  const { onlineUserIds } = useSelector((state) => state.users);
+  const { onlineUserIds, list: users } = useSelector((state) => state.users);
+
+  // Resolve activeUser dynamically to keep status/last_seen synced in real-time
+  const activeUser = selectedUser
+    ? users.find((u) => String(u.id) === String(selectedUser.id)) ||
+      selectedUser
+    : null;
 
   useEffect(() => {
-    if (activeUser) {
-      dispatch(fetchMessages(activeUser.id));
+    if (selectedUser) {
+      dispatch(fetchMessages(selectedUser.id));
     }
-  }, [activeUser, dispatch]);
+  }, [selectedUser, dispatch]);
 
   useEffect(() => {
     if (!activeUser || !user) return;
@@ -114,10 +153,30 @@ const ChatWindow = () => {
             />
           </div>
 
-          <div>
-            <p className="text-[14.5px] font-bold text-violet-50 tracking-wide leading-tight">
-              {activeUser.name}
-            </p>
+          <div className="flex flex-col justify-center">
+            {/* Name Row */}
+            <div>
+              <p className="text-[14.5px] font-bold text-violet-50   mb-2 tracking-wide leading-tight">
+                {activeUser.name}
+              </p>
+            </div>
+
+            {/* Status Row - Stacks directly below the name */}
+            <div>
+              <p
+                className={`text-[11px] mt-0.5  font-medium leading-none ${
+                  isActiveUserOnline || typingUsers?.[String(activeUser.id)]
+                    ? "text-emerald-400"
+                    : "text-slate-400"
+                }`}
+              >
+                {typingUsers?.[String(activeUser.id)]
+                  ? "typing..."
+                  : isActiveUserOnline
+                    ? "Online"
+                    : formatLastSeen(activeUser.last_seen)}
+              </p>
+            </div>
           </div>
         </div>
 

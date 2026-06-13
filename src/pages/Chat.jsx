@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 import { connectSocket, getSocket } from "../services/socket";
-import { setOnlineUsers, fetchUsers } from "../redux/usersSlice";
+import { setOnlineUsers, fetchUsers, updateUserLastSeen } from "../redux/usersSlice";
 import {
   markMessagesSeen,
   receiveMessage,
@@ -82,6 +82,11 @@ const Chat = () => {
       dispatch(removeMessage({ messageId }));
     });
 
+    socket.on("userOffline", (data) => {
+      console.log("[Socket] Received userOffline event. Data:", data);
+      dispatch(updateUserLastSeen(data));
+    });
+
     return () => {
       console.log("[Socket] Cleaning up listeners");
       socket.off("connect");
@@ -93,6 +98,7 @@ const Chat = () => {
       socket.off("friendRequestAccepted");
       socket.off("friendRequestReceived");
       socket.off("messageDeletedForEveryone");
+      socket.off("userOffline");
     };
   }, [user, dispatch]);
 

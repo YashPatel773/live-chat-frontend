@@ -14,6 +14,33 @@ const avatarGradients = [
   "from-indigo-500 to-violet-700",
 ];
 
+const formatLastSeenShort = (lastSeenStr) => {
+  if (!lastSeenStr) return "Offline";
+  try {
+    const d = new Date(lastSeenStr);
+    if (isNaN(d.getTime())) return "Offline";
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const itemDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    
+    if (itemDate.getTime() === today.getTime()) {
+      const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return `Last seen ${timeStr}`;
+    } else if (itemDate.getTime() === yesterday.getTime()) {
+      return "Last seen yesterday";
+    } else {
+      const dateStr = d.toLocaleDateString([], { month: "short", day: "numeric" });
+      return `Last seen ${dateStr}`;
+    }
+  } catch (e) {
+    return "Offline";
+  }
+};
+
 const Sidebar = () => {
   const dispatch = useDispatch();
   const {
@@ -143,7 +170,7 @@ const Sidebar = () => {
               Add Friend
             </button>
           </div>
-        )}
+        )}  
 
         {!loading &&
           users.length > 0 &&
@@ -200,7 +227,6 @@ const Sidebar = () => {
                   <p
                     className={`text-[11px] mt-0.5 font-medium ${isOnline ? "text-emerald-400" : "text-slate-500"}`}
                   >
-                    {/* {isTyping && activeUser?.id === user.id ? "Typing..." : isOnline ? "● Online" : "Offline"} */}
                     {typingUsers?.[String(user.id)] &&
                     activeUser?.id !== user.id
                       ? "Typing..."

@@ -16,16 +16,99 @@ export const fetchMessages = createAsyncThunk(
   },
 );
 
+class TaskQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+  }
+
+  enqueue(task) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ task, resolve, reject });
+      this.process();
+    });
+  }
+
+  async process() {
+    if (this.processing) return;
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const { task, resolve, reject } = this.queue[0];
+      try {
+        const result = await task();
+        resolve(result);
+        this.queue.shift();
+      } catch (error) {
+        reject(error);
+        this.queue.shift();
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
+const messageSendQueue = new TaskQueue();
+
+const waitTillOnline = () => {
+  if (navigator.onLine) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.addEventListener("online", resolve, { once: true });
+  });
+};
+
+const sendWithRetry = async (receiverId, message) => {
+  let attempt = 0;
+  while (true) {
+    if (!navigator.onLine) {
+      console.log(
+        "[Offline] Message sending paused. Waiting for connection...",
+      );
+      await waitTillOnline();
+      console.log("[Online] Connection restored. Retrying message send...");
+    }
+
+    try {
+      const response = await api.post(
+        "/messages",
+        {
+          receiver_id: receiverId,
+          message,
+        },
+        {
+          timeout: 10000, // 10 seconds timeout for slow networks
+        },
+      );
+      return response.data.message;
+    } catch (error) {
+      attempt++;
+      const isNetworkOrServerError =
+        !error.response ||
+        (error.response.status >= 500 && error.response.status <= 599);
+      if (isNetworkOrServerError) {
+        const backoffDelay = Math.min(attempt * 2000, 10000);
+        console.log(
+          `[Send Error] Network/server issue. Attempt ${attempt} failed. Retrying in ${backoffDelay / 1000}s...`,
+          error,
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+      } else {
+        throw error;
+      }
+    }
+  }
+};
+
 // 2. ASYNC ACTION: Post a new message out to Laravel API
 export const sendNewMessage = createAsyncThunk(
   "chat/sendNewMessage",
-  async ({ receiverId, message }, { rejectWithValue }) => {
+  async ({ receiverId, message, tempId, senderId }, { rejectWithValue }) => {
     try {
-      const response = await api.post("/messages", {
-        receiver_id: receiverId,
-        message,
+      const result = await messageSendQueue.enqueue(async () => {
+        return await sendWithRetry(receiverId, message);
       });
-      return response.data.message; // Returns newly generated DB row object
+      return result;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Message failed to send");
     }
@@ -81,6 +164,7 @@ const chatSlice = createSlice({
     loading: false,
     unreadCounts: {}, // Track real-time unread badge counts for each sender
     typingUsers: {}, // key: senderId, value: boolean
+    pendingQueue: [], // Track messages that are currently sending/pending
   },
   reducers: {
     // Change current conversation focus target
@@ -172,14 +256,69 @@ const chatSlice = createSlice({
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         state.loading = false;
-        state.messages = action.payload;
+        const fetchedMessages = action.payload || [];
+        const pendingForActiveUser = (state.pendingQueue || []).filter(
+          (msg) =>
+            state.activeUser &&
+            String(msg.receiver_id) === String(state.activeUser.id),
+        );
+        state.messages = [...fetchedMessages, ...pendingForActiveUser];
       })
       .addCase(fetchMessages.rejected, (state) => {
         state.loading = false;
       })
 
+      .addCase(sendNewMessage.pending, (state, action) => {
+        const { receiverId, message, tempId, senderId } = action.meta.arg;
+        const tempMsg = {
+          id: tempId,
+          sender_id: senderId,
+          receiver_id: receiverId,
+          message: message,
+          created_at: new Date().toISOString(),
+          is_seen: false,
+          status: "pending",
+        };
+        if (!state.pendingQueue) state.pendingQueue = [];
+        state.pendingQueue.push(tempMsg);
+
+        if (
+          state.activeUser &&
+          String(state.activeUser.id) === String(receiverId)
+        ) {
+          state.messages.push(tempMsg);
+        }
+      })
       .addCase(sendNewMessage.fulfilled, (state, action) => {
-        state.messages.push(action.payload); // Add our own successfully saved message to view
+        const { tempId } = action.meta.arg;
+        if (state.pendingQueue) {
+          state.pendingQueue = state.pendingQueue.filter(
+            (msg) => msg.id !== tempId,
+          );
+        }
+
+        const index = state.messages.findIndex((msg) => msg.id === tempId);
+        if (index !== -1) {
+          state.messages[index] = action.payload;
+        } else {
+          const receiverId = action.payload.receiver_id;
+          if (
+            state.activeUser &&
+            (String(action.payload.sender_id) === String(state.activeUser.id) ||
+              String(receiverId) === String(state.activeUser.id))
+          ) {
+            state.messages.push(action.payload);
+          }
+        }
+      })
+      .addCase(sendNewMessage.rejected, (state, action) => {
+        const { tempId } = action.meta.arg;
+        if (state.pendingQueue) {
+          state.pendingQueue = state.pendingQueue.filter(
+            (msg) => msg.id !== tempId,
+          );
+        }
+        state.messages = state.messages.filter((msg) => msg.id !== tempId);
       });
   },
 });
