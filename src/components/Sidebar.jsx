@@ -68,7 +68,7 @@ const Sidebar = () => {
   console.log({ users });
 
   return (
-    <div className="w-80 h-screen flex flex-col bg-[#0d0d15] border-r border-white/[0.06]">
+    <div className="w-full h-full flex flex-col bg-[#0d0d15]">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] bg-white/[0.02]">
         <div>

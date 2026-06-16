@@ -8,6 +8,8 @@ const ProtectedRoute = ({ children }) => {
 
     // If the token is null, redirect the user immediately to the login view
     if (!token) {
+        localStorage.removeItem("chat_token");
+        localStorage.removeItem("chat_user");
         return <Navigate to="/login" replace />;
     }
 

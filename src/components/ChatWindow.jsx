@@ -92,7 +92,7 @@ const ChatWindow = () => {
   /* ── Empty state ── */
   if (!activeUser) {
     return (
-      <div className="flex-1 h-screen bg-[#0a0a10] flex flex-col items-center justify-center relative overflow-hidden">
+      <div className="w-full h-full bg-[#0a0a10] flex flex-col items-center justify-center relative overflow-hidden">
         {/* subtle grid bg */}
         <div
           className="absolute inset-0 opacity-[0.03]"
@@ -133,75 +133,68 @@ const ChatWindow = () => {
     );
   }
 
-  /* ── Active chat ── */
   return (
-    <div className="flex-1 h-screen flex flex-col bg-[#0a0a10]">
-      {/* Header */}
+    <div className="w-full h-full flex flex-col bg-[#0a0a10]">
       <div className="relative flex items-center justify-between px-5 py-3.5 bg-[#0d0d1a]/95 border-b border-white/[0.06] backdrop-blur-md z-10">
-        {/* bottom glow line */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
 
         <div className="flex items-center gap-3">
-          {/* Avatar */}
+          {/* Back button visible only on mobile screens */}
+          <button
+            onClick={() => dispatch(setActiveUser(null))}
+            className="md:hidden p-1 mr-1 text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center rounded-lg hover:bg-white/5 active:scale-95"
+            aria-label="Back to contacts"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-[13px] bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white font-bold text-[14px]">
               {activeUser.name.charAt(0).toUpperCase()}
             </div>
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d1a]
-              ${isActiveUserOnline ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.7)]" : "bg-slate-600"}`}
+      ${isActiveUserOnline ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.7)]" : "bg-slate-600"}`}
             />
           </div>
 
-          <div className="flex flex-col justify-center">
-            {/* Name Row */}
-            <div>
-              <p className="text-[14.5px] font-bold text-violet-50   mb-2 tracking-wide leading-tight">
-                {activeUser.name}
-              </p>
-            </div>
+          <div className="flex flex-col justify-center items-start min-w-0 gap-0.5">
+            <h3 className="text-white font-semibold text-[15px] leading-snug truncate">
+              {activeUser.name}
+            </h3>
 
-            {/* Status Row - Stacks directly below the name */}
-            <div>
-              <p
-                className={`text-[11px] mt-0.5  font-medium leading-none ${
-                  isActiveUserOnline || typingUsers?.[String(activeUser.id)]
+            <p
+              className={`text-xs truncate ${
+                typingUsers?.[String(activeUser.id)]
+                  ? "text-emerald-400"
+                  : isActiveUserOnline
                     ? "text-emerald-400"
                     : "text-slate-400"
-                }`}
-              >
-                {typingUsers?.[String(activeUser.id)]
-                  ? "typing..."
-                  : isActiveUserOnline
-                    ? "Online"
-                    : formatLastSeen(activeUser.last_seen)}
-              </p>
-            </div>
+              }`}
+            >
+              {typingUsers?.[String(activeUser.id)]
+                ? "Typing..."
+                : isActiveUserOnline
+                  ? "Online"
+                  : formatLastSeen(activeUser.last_seen)}
+            </p>
           </div>
         </div>
 
-        {/* Encrypted badge */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/[0.07] border border-emerald-500/15">
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="rgba(52,211,153,0.8)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <span className="text-[10px] font-semibold text-emerald-400/80 tracking-wide">
-            Encrypted
-          </span>
-        </div>
+        
       </div>
-
-      {/* Messages */}
+ 
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div className="w-8 h-8 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />

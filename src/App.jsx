@@ -20,7 +20,6 @@ function App() {
                     </ProtectedRoute>
                 } />
 
-                {/* Fallback Safety Rule */}
                 <Route path="*" element={<Navigate to="/chat" replace />} />
             </Routes>
         </BrowserRouter>

@@ -99,7 +99,6 @@ const MessageList = () => {
     }
   };
 
-  // Group messages by date
   const grouped = [];
   let lastDate = null;
   messages.forEach((msg) => {
@@ -151,7 +150,7 @@ const MessageList = () => {
             onContextMenu={(e) => handleContextMenu(e, msg)}
           >
             <div
-              className={`max-w-[68%] px-4 py-2.5 text-[14px] leading-relaxed break-words cursor-pointer select-text
+              className={`max-w-[85%] md:max-w-[68%] px-4 py-2.5 text-[14px] leading-relaxed break-words cursor-pointer select-text
                 ${
                   isSentByMe
                     ? "bg-gradient-to-br  from-violet-600 to-violet-800 text-white rounded-[18px] rounded-br-[4px] shadow-[0_4px_18px_rgba(109,40,217,0.35)]"

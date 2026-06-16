@@ -168,8 +168,29 @@ const chatSlice = createSlice({
   },
   reducers: {
     // Change current conversation focus target
+    // setActiveUser: (state, action) => {
+
+    //   if (
+    //     !state.activeUser ||
+    //     String(state.activeUser.id) !== String(action.payload.id)
+    //   ) {
+    //     state.activeUser = action.payload;
+    //     state.messages = [];
+    //   }
+    //   // Reset unread count for the opened chat
+    //   if (action.payload) {
+    //     const userId = String(action.payload.id);
+    //     state.unreadCounts[userId] = 0;
+    //   }
+    // },
+
     setActiveUser: (state, action) => {
-      // Only change active user and clear messages if the clicked user is different
+      if (action.payload === null) {
+        state.activeUser = null;
+        state.messages = [];
+        return;
+      }
+
       if (
         !state.activeUser ||
         String(state.activeUser.id) !== String(action.payload.id)
@@ -177,15 +198,13 @@ const chatSlice = createSlice({
         state.activeUser = action.payload;
         state.messages = [];
       }
+
       // Reset unread count for the opened chat
-      if (action.payload) {
-        const userId = String(action.payload.id);
-        state.unreadCounts[userId] = 0;
-      }
+      const userId = String(action.payload.id);
+      state.unreadCounts[userId] = 0;
     },
 
     receiveMessage: (state, action) => {
-      // Push message to active layout ONLY if it belongs to current conversation thread
       if (
         state.activeUser &&
         (String(action.payload.sender_id) === String(state.activeUser.id) ||
@@ -193,7 +212,6 @@ const chatSlice = createSlice({
       ) {
         state.messages.push(action.payload);
       } else {
-        // Message is from a background user — increment their unread badge count
         const senderId = String(action.payload.sender_id);
         state.unreadCounts[senderId] = (state.unreadCounts[senderId] || 0) + 1;
       }

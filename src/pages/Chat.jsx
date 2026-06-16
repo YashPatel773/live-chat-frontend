@@ -16,6 +16,8 @@ const Chat = () => {
   const { user } = useSelector((state) => state.auth);
   const { list: users } = useSelector((state) => state.users);
 
+  const { activeUser } = useSelector((state) => state.chat);
+
   // Store latest users list in ref to avoid re-binding socket listeners when list updates
   const usersRef = useRef(users);
   useEffect(() => {
@@ -104,8 +106,23 @@ const Chat = () => {
 
   return (
     <div className="w-full h-screen overflow-hidden flex bg-[#0a0a10] select-none">
-      <Sidebar />
-      <ChatWindow />
+      {/* Sidebar Wrapper */}
+      <div
+        className={`w-full md:w-80 h-full flex-shrink-0 flex flex-col border-r border-white/[0.06] ${
+          activeUser ? "hidden md:flex" : "flex"
+        }`}
+      >
+        <Sidebar />
+      </div>
+
+      {/* ChatWindow Wrapper */}
+      <div
+        className={`w-full h-full md:flex-1 flex flex-col bg-[#0a0a10] ${
+          !activeUser ? "hidden md:flex" : "flex"
+        }`}
+      >
+        <ChatWindow />
+      </div>
     </div>
   );
 };
