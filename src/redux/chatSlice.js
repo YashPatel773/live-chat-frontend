@@ -128,6 +128,29 @@ export const sendNewMessage = createAsyncThunk(
 //     }
 //   },
 // );
+export const clearSidebarChat = createAsyncThunk(
+  "chat/clearSidebarChat",
+  async (friendId, { rejectWithValue }) => {
+    try {
+      await api.post(`/messages/clear/${friendId}`);
+      return friendId;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to clear chat");
+    }
+  },
+);
+
+export const removeFriend = createAsyncThunk(
+  "chat/removeFriend",
+  async (friendId, { rejectWithValue }) => {
+    try {
+      await api.post(`/friend-request/remove`, { friend_id: friendId });
+      return friendId;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to remove friend");
+    }
+  },
+);
 
 export const markAsSeen = createAsyncThunk(
   "chat/markAsSeen",
@@ -267,6 +290,23 @@ const chatSlice = createSlice({
         state.messages = state.messages.filter(
           (msg) => msg.id !== action.payload.messageId,
         );
+      })
+      .addCase(clearSidebarChat.fulfilled, (state, action) => {
+        if (
+          state.activeUser &&
+          String(state.activeUser.id) === String(action.payload)
+        ) {
+          state.messages = [];
+        }
+      })
+      .addCase(removeFriend.fulfilled, (state, action) => {
+        if (
+          state.activeUser &&
+          String(state.activeUser.id) === String(action.payload)
+        ) {
+          state.activeUser = null;
+          state.messages = [];
+        }
       })
 
       .addCase(fetchMessages.pending, (state) => {
