@@ -70,8 +70,7 @@ const chatSlice = createSlice({
   },
   reducers: {
     // Change current conversation focus target
-    setActiveUser: (state, action) => {
-      // Only change active user and clear messages if the clicked user is different
+    setActiveUser: (state, action) => { 
       if (
         !state.activeUser ||
         String(state.activeUser.id) !== String(action.payload.id)
