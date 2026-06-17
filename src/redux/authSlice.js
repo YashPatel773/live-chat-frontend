@@ -10,11 +10,10 @@ export const loginUser = createAsyncThunk(
       const response = await api.post("/login", credentials);
       console.log({ response });
 
-      // Save token and user details to browser storage so they stay logged in on refresh
+     
       localStorage.setItem("chat_token", response.data.access_token);
       localStorage.setItem("chat_user", JSON.stringify(response.data.user));
-
-      // Start live real-time connection
+      
       connectSocket(response.data.user);
 
       return response.data;
