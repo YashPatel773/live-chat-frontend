@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Disallow: /chat   
+
+Sitemap: https://live-chat-frontend-nu.vercel.app/sitemap.xml
