@@ -12,8 +12,8 @@ export const connectSocket = (user) => {
             autoConnect: false // Don't connect instantly until we tell it to
         });
     }
-    console.log({user});
-    
+
+    // Define the connect event handler
     const onConnect = () => {
         console.log("[Socket] Connection established/re-established. Emitting join for user:", user);
         socket.emit('join', user);

@@ -8,12 +8,12 @@ export const loginUser = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       const response = await api.post("/login", credentials);
-      console.log({ response });
+    
 
      
       localStorage.setItem("chat_token", response.data.access_token);
       localStorage.setItem("chat_user", JSON.stringify(response.data.user));
-      
+
       connectSocket(response.data.user);
 
       return response.data;

@@ -9,6 +9,10 @@
     receiveMessage,
     removeMessage,
     setTypingStatus,
+    fetchGroups,
+    addGroup,
+    updateGroup,
+    removeGroup,
   } from "../redux/chatSlice";
 
   const Chat = () => {
@@ -16,7 +20,7 @@
     const { user } = useSelector((state) => state.auth);
     const { list: users } = useSelector((state) => state.users);
 
-    const { activeUser } = useSelector((state) => state.chat);
+    const { activeUser, groups } = useSelector((state) => state.chat);
 
     // Store latest users list in ref to avoid re-binding socket listeners when list updates
     const usersRef = useRef(users);
@@ -24,10 +28,28 @@
       usersRef.current = users;
     }, [users]);
 
+    // Fetch groups on mount
+    useEffect(() => {
+      if (user) {
+        dispatch(fetchGroups());
+      }
+    }, [user, dispatch]);
+
+    // Join Socket.io rooms for all groups
+    useEffect(() => {
+      if (groups.length > 0) {
+        const socket = getSocket();
+        if (socket) {
+          const groupIds = groups.map((g) => g.id);
+          socket.emit("joinGroups", groupIds);
+          console.log("[Socket] Joined groups rooms:", groupIds);
+        }
+      }
+    }, [groups]);
+
     useEffect(() => {
       if (!user) return;
-
-      // 1. Initialize global web socket communication interface
+ 
       const socket = connectSocket(user);
       console.log("[Socket] Initialized connectSocket for user:", user);
 
@@ -84,6 +106,22 @@
         dispatch(removeMessage({ messageId }));
       });
 
+      socket.on("groupCreated", (newGroup) => {
+        console.log("[Socket] Group created event received:", newGroup);
+        dispatch(addGroup(newGroup));
+        socket.emit("joinGroup", newGroup.id);
+      });
+
+      socket.on("groupUpdated", ({ group }) => {
+        console.log("[Socket] Group updated event received:", group);
+        dispatch(updateGroup(group));
+      });
+
+      socket.on("groupRemoved", ({ groupId }) => {
+        console.log("[Socket] Group removed event received:", groupId);
+        dispatch(removeGroup(groupId));
+      });
+
       socket.on("userOffline", (data) => {
         console.log("[Socket] Received userOffline event. Data:", data);
         dispatch(updateUserLastSeen(data));
@@ -101,6 +139,9 @@
         socket.off("friendRequestReceived");
         socket.off("messageDeletedForEveryone");
         socket.off("userOffline");
+        socket.off("groupCreated");
+        socket.off("groupUpdated");
+        socket.off("groupRemoved");
       };
     }, [user, dispatch]);
 

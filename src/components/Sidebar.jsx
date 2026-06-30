@@ -5,9 +5,13 @@ import {
   setActiveUser,
   clearSidebarChat,
   removeFriend,
+  fetchGroups,
 } from "../redux/chatSlice";
 import { logout } from "../redux/authSlice";
 import AddFriendModal from "./AddFriendModal";
+import CreateGroupModal from "./CreateGroupModal";
+import { useNavigate } from "react-router-dom";
+import { disconnectSocket } from "../services/socket";
 
 const avatarGradients = [
   "from-violet-500 to-purple-700",
@@ -58,16 +62,26 @@ const Sidebar = () => {
     onlineUserIds,
     loading,
   } = useSelector((state) => state.users);
-  const { activeUser, unreadCounts, typingUsers } = useSelector(
+  const { activeUser, unreadCounts, typingUsers, groups } = useSelector(
     (state) => state.chat,
   );
 
   const { user: currentUser } = useSelector((state) => state.auth);
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [searchContactQuery, setSearchContactQuery] = useState("");
   const [activeMenuUserId, setActiveMenuUserId] = useState(null);
 
-  // Close contact menu on outside click
+  const { token } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      disconnectSocket();
+    }
+  }, [token, navigate]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".contact-menu-container")) {
@@ -84,10 +98,15 @@ const Sidebar = () => {
 
   useEffect(() => {
     dispatch(fetchUsers());
+    dispatch(fetchGroups());
   }, [dispatch]);
 
   const filteredUsers = users.filter((u) =>
     u.name.toLowerCase().includes(searchContactQuery.toLowerCase()),
+  );
+
+  const filteredGroups = groups.filter((g) =>
+    g.name.toLowerCase().includes(searchContactQuery.toLowerCase()),
   );
 
   return (
@@ -155,22 +174,23 @@ const Sidebar = () => {
         </div>
       </div>
 
-      {/* Section label + count */}
+      {/* Section label + actions */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <span className="text-[10px] font-bold tracking-[0.14em] uppercase text-slate-500">
-          Contacts
+          Chats
         </span>
-        <div className="flex items-center gap-2">
-          {!loading && users.length > 0 && (
-            <span className="text-[10px] font-semibold text-violet-400/70 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
-              {users.length}
-            </span>
-          )}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setIsAddFriendOpen(true)}
             className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400 text-[10.5px] font-bold hover:bg-violet-600/20 hover:border-violet-400/40 hover:text-violet-300 transition-all duration-200"
           >
-            + Add Friend
+            + Friend
+          </button>
+          <button
+            onClick={() => setIsCreateGroupOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-violet-600/10 border border-violet-500/20 text-violet-400 text-[10.5px] font-bold hover:bg-violet-600/20 hover:border-violet-400/40 hover:text-violet-300 transition-all duration-200"
+          >
+            + Group
           </button>
         </div>
       </div>
@@ -186,7 +206,8 @@ const Sidebar = () => {
           </div>
         )}
 
-        {!loading && users.length === 0 && (
+        {/* Empty state: No friends and no groups */}
+        {!loading && users.length === 0 && groups.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center gap-3 bg-white/[0.01] rounded-3xl border border-white/[0.03] mx-1 mt-4">
             <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.1)]">
               <svg
@@ -207,174 +228,272 @@ const Sidebar = () => {
             </div>
             <div>
               <p className="text-[13px] font-bold text-slate-300">
-                No Friends Yet
+                No Conversations Yet
               </p>
               <p className="text-[11px] text-slate-500 mt-1 max-w-[190px] mx-auto leading-relaxed">
-                Connect with colleagues or buddies by adding them!
+                Connect with colleagues or buddies by adding them or creating a
+                group!
               </p>
             </div>
-            <button
-              onClick={() => setIsAddFriendOpen(true)}
-              className="mt-1 px-4 py-2 rounded-xl bg-violet-600 text-white text-[11px] font-bold hover:bg-violet-700 hover:shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95 transition-all duration-200"
-            >
-              Add Friend
-            </button>
-          </div>
-        )}
-
-        {!loading && users.length > 0 && filteredUsers.length === 0 && (
-          <div className="text-center py-8 text-slate-500 text-xs">
-            No contacts match "{searchContactQuery}"
-          </div>
-        )}
-
-        {!loading &&
-          filteredUsers.length > 0 &&
-          filteredUsers.map((user) => {
-            const isOnline = onlineUserIds.includes(String(user.id));
-            const isSelected = activeUser?.id === user.id;
-            const unread = unreadCounts?.[String(user.id)] || 0;
-            const gradientClass =
-              avatarGradients[user.id % avatarGradients.length];
-            const badgeLabel =
-              unread > 99
-                ? "99+"
-                : unread > 5
-                  ? `${unread}+`
-                  : unread > 0
-                    ? String(unread)
-                    : null;
-
-            return (
-              <div
-                key={user.id}
-                onClick={() => dispatch(setActiveUser(user))}
-                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-200 group
-                ${
-                  isSelected
-                    ? "bg-violet-600/[0.18] border border-violet-500/30 shadow-[0_0_20px_rgba(139,92,246,0.08)]"
-                    : "border border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]"
-                }`}
+            <div className="flex gap-2 justify-center mt-1">
+              <button
+                onClick={() => setIsAddFriendOpen(true)}
+                className="px-3 py-2 rounded-xl bg-violet-600 text-white text-[11px] font-bold hover:bg-violet-700 hover:shadow-[0_0_15px_rgba(139,92,246,0.4)] active:scale-95 transition-all duration-200"
               >
-                {/* Active left bar */}
-                {isSelected && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full bg-gradient-to-b from-violet-400 to-violet-700" />
-                )}
+                Add Friend
+              </button>
+              <button
+                onClick={() => setIsCreateGroupOpen(true)}
+                className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-300 text-[11px] font-bold hover:bg-white/[0.08] active:scale-95 transition-all duration-200"
+              >
+                Create Group
+              </button>
+            </div>
+          </div>
+        )}
 
-                {/* Avatar */}
-                <div className="relative flex-shrink-0">
-                  <div
-                    className={`w-10 h-10 rounded-[13px] bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white font-bold text-[14px]`}
-                  >
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span
-                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d18]
-                  ${isOnline ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.7)]" : "bg-slate-600"}`}
-                  />
+        {/* No search results */}
+        {!loading &&
+          (users.length > 0 || groups.length > 0) &&
+          filteredUsers.length === 0 &&
+          filteredGroups.length === 0 && (
+            <div className="text-center py-8 text-slate-500 text-xs">
+              No chats match "{searchContactQuery}"
+            </div>
+          )}
+
+        {!loading && (
+          <>
+            {/* Groups Render Section */}
+            {filteredGroups.length > 0 && (
+              <div className="mb-4">
+                <div className="px-3 pt-2 pb-1.5 flex items-center justify-between">
+                  <span className="text-[10px] font-bold tracking-[0.14em] uppercase text-slate-500">
+                    Groups ({filteredGroups.length})
+                  </span>
                 </div>
+                <div className="space-y-0.5">
+                  {filteredGroups.map((group) => {
+                    const isSelected =
+                      activeUser?.is_group && activeUser?.id === group.id;
+                    const unread = unreadCounts?.[`group_${group.id}`] || 0;
+                    const badgeLabel =
+                      unread > 99 ? "99+" : unread > 0 ? String(unread) : null;
+                    const gradientClass =
+                      avatarGradients[group.id % avatarGradients.length];
 
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={`text-[13.5px] font-semibold truncate ${isSelected ? "text-violet-50" : "text-slate-200"}`}
-                  >
-                    {user.name}
-                  </p>
-                  <p
-                    className={`text-[11px] mt-0.5 font-medium ${isOnline ? "text-emerald-400" : "text-slate-500"}`}
-                  >
-                    {typingUsers?.[String(user.id)] &&
-                    activeUser?.id !== user.id
-                      ? "Typing..."
-                      : isOnline
-                        ? "● Online"
-                        : "Offline"}
-                  </p>
-                </div>
-
-                {/* Badge and options dropdown */}
-                <div className="flex items-center gap-2 contact-menu-container relative">
-                  {!isSelected && badgeLabel && (
-                    <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse">
-                      {badgeLabel}
-                    </span>
-                  )}
- 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMenuUserId(
-                        activeMenuUserId === user.id ? null : user.id,
-                      );
-                    }}
-                    className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200"
-                    title="Manage contact"
-                  >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
-                  </button>
-
-                  {/* Dropdown Options */}
-                  {activeMenuUserId === user.id && (
-                    <div className="absolute right-0 top-8 z-30 min-w-[130px] rounded-2xl overflow-hidden bg-[#16161f] border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] py-1 text-left">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuUserId(null);
-                          if (
-                            confirm(
-                              `Are you sure you want to clear chat history with ${user.name}?`,
-                            )
-                          ) {
-                            dispatch(clearSidebarChat(user.id));
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 text-[12px] font-semibold text-slate-300 hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
+                    return (
+                      <div
+                        key={`group-${group.id}`}
+                        onClick={() => dispatch(setActiveUser(group))}
+                        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-200 group
+                          ${
+                            isSelected
+                              ? "bg-violet-600/[0.18] border border-violet-500/30 shadow-[0_0_20px_rgba(139,92,246,0.08)]"
+                              : "border border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]"
+                          }`}
                       >
-                        Clear Chat
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuUserId(null);
-                          if (
-                            confirm(
-                              `Are you sure you want to remove ${user.name} from friends?`,
-                            )
-                          ) {
-                            dispatch(removeFriend(user.id)).then(() => {
-                              dispatch(fetchUsers());
-                            });
-                          }
-                        }}
-                        className="w-full px-4 py-2.5 text-[12px] font-semibold text-red-400 hover:bg-red-500/[0.08] transition-colors duration-150 cursor-pointer"
-                      >
-                        Remove Friend
-                      </button>
-                    </div>
-                  )}
+                        {isSelected && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full bg-gradient-to-b from-violet-400 to-violet-700" />
+                        )}
+
+                        <div className="relative flex-shrink-0">
+                          <div
+                            className={`w-10 h-10 rounded-[13px] bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white font-bold text-[14px]`}
+                          >
+                            👥
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-[13.5px] font-semibold truncate ${isSelected ? "text-violet-50" : "text-slate-200"}`}
+                          >
+                            {group.name}
+                          </p>
+                          <p className="text-[11px] mt-0.5 text-slate-500 truncate">
+                            {group.members
+                              ? `${group.members.length} members`
+                              : "Group Chat"}
+                          </p>
+                        </div>
+
+                        {badgeLabel && (
+                          <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse">
+                            {badgeLabel}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
+            )}
+
+            {/* Contacts Render Section */}
+            {filteredUsers.length > 0 && (
+              <div>
+                <div className="px-3 pt-1.5 pb-1.5 flex items-center justify-between">
+                  <span className="text-[10px] font-bold tracking-[0.14em] uppercase text-slate-500">
+                    Contacts ({filteredUsers.length})
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {filteredUsers.map((user) => {
+                    const isOnline = onlineUserIds.includes(String(user.id));
+                    const isSelected =
+                      !activeUser?.is_group && activeUser?.id === user.id;
+                    const unread = unreadCounts?.[String(user.id)] || 0;
+                    const gradientClass =
+                      avatarGradients[user.id % avatarGradients.length];
+                    const badgeLabel =
+                      unread > 99
+                        ? "99+"
+                        : unread > 5
+                          ? `${unread}+`
+                          : unread > 0
+                            ? String(unread)
+                            : null;
+
+                    return (
+                      <div
+                        key={user.id}
+                        onClick={() => dispatch(setActiveUser(user))}
+                        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-200 group
+                          ${
+                            isSelected
+                              ? "bg-violet-600/[0.18] border border-violet-500/30 shadow-[0_0_20px_rgba(139,92,246,0.08)]"
+                              : "border border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]"
+                          }`}
+                      >
+                        {/* Active left bar */}
+                        {isSelected && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full bg-gradient-to-b from-violet-400 to-violet-700" />
+                        )}
+
+                        {/* Avatar */}
+                        <div className="relative flex-shrink-0">
+                          <div
+                            className={`w-10 h-10 rounded-[13px] bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white font-bold text-[14px]`}
+                          >
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0d0d18]
+                              ${isOnline ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.7)]" : "bg-slate-600"}`}
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-[13.5px] font-semibold truncate ${isSelected ? "text-violet-50" : "text-slate-200"}`}
+                          >
+                            {user.name}
+                          </p>
+                          <p
+                            className={`text-[11px] mt-0.5 font-medium ${isOnline ? "text-emerald-400" : "text-slate-500"}`}
+                          >
+                            {typingUsers?.[String(user.id)] &&
+                            activeUser?.id !== user.id
+                              ? "Typing..."
+                              : isOnline
+                                ? "● Online"
+                                : "Offline"}
+                          </p>
+                        </div>
+
+                        {/* Badge and options dropdown */}
+                        <div className="flex items-center gap-2 contact-menu-container relative">
+                          {!isSelected && badgeLabel && (
+                            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse">
+                              {badgeLabel}
+                            </span>
+                          )}
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuUserId(
+                                activeMenuUserId === user.id ? null : user.id,
+                              );
+                            }}
+                            className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200"
+                            title="Manage contact"
+                          >
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx="12" cy="12" r="1" />
+                              <circle cx="12" cy="5" r="1" />
+                              <circle cx="12" cy="19" r="1" />
+                            </svg>
+                          </button>
+
+                          {/* Dropdown Options */}
+                          {activeMenuUserId === user.id && (
+                            <div className="absolute right-0 top-8 z-30 min-w-[130px] rounded-2xl overflow-hidden bg-[#16161f] border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] py-1 text-left">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuUserId(null);
+                                  if (
+                                    confirm(
+                                      `Are you sure you want to clear chat history with ${user.name}?`,
+                                    )
+                                  ) {
+                                    dispatch(clearSidebarChat(user.id));
+                                  }
+                                }}
+                                className="w-full px-4 py-2.5 text-[12px] font-semibold text-slate-300 hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
+                              >
+                                Clear Chat
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuUserId(null);
+                                  if (
+                                    confirm(
+                                      `Are you sure you want to remove ${user.name} from friends?`,
+                                    )
+                                  ) {
+                                    dispatch(removeFriend(user.id)).then(() => {
+                                      dispatch(fetchUsers());
+                                    });
+                                  }
+                                }}
+                                className="w-full px-4 py-2.5 text-[12px] font-semibold text-red-400 hover:bg-red-500/[0.08] transition-colors duration-150 cursor-pointer"
+                              >
+                                Remove Friend
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <AddFriendModal
         isOpen={isAddFriendOpen}
         onClose={() => setIsAddFriendOpen(false)}
         onFriendAdded={handleFriendAdded}
+      />
+      <CreateGroupModal
+        isOpen={isCreateGroupOpen}
+        onClose={() => setIsCreateGroupOpen(false)}
       />
     </div>
   );

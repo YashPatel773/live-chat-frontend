@@ -51,9 +51,20 @@ const MessageInput = () => {
       !!socket,
     );
 
-    dispatch(sendNewMessage({ receiverId: activeUser.id, message: text }))
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    dispatch(
+      sendNewMessage({
+        senderId: currentUser.id,
+        receiverId: activeUser.id,
+        message: text,
+        tempId,
+      }),
+    )
       .unwrap()
       .then((savedMessage) => {
+
+        console.log({savedMessage});
+        // debugger
         console.log("[Socket] Message saved in DB. Payload:", savedMessage);
         if (socket) {
           socket.emit("sendMessage", savedMessage);
@@ -70,8 +81,7 @@ const MessageInput = () => {
       .catch((err) => {
         console.error("[Socket] Failed to save message in DB:", err);
       });
-
-    console.log("jhsdbj");
+ 
     setText("");
   };
 

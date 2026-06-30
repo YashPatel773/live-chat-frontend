@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchUsers } from "../redux/usersSlice";
-import { setActiveUser } from "../redux/chatSlice";
+import {
+  setActiveUser,
+  clearSidebarChat,
+  removeFriend,
+} from "../redux/chatSlice";
 import { logout } from "../redux/authSlice";
 import AddFriendModal from "./AddFriendModal";
+import { useNavigate } from "react-router-dom";
+import { disconnectSocket } from "../services/socket";
 
 const avatarGradients = [
   "from-violet-500 to-purple-700",
@@ -14,6 +20,39 @@ const avatarGradients = [
   "from-indigo-500 to-violet-700",
 ];
 
+const formatLastSeenShort = (lastSeenStr) => {
+  if (!lastSeenStr) return "Offline";
+  try {
+    const d = new Date(lastSeenStr);
+    if (isNaN(d.getTime())) return "Offline";
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const itemDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    if (itemDate.getTime() === today.getTime()) {
+      const timeStr = d.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      return `Last seen ${timeStr}`;
+    } else if (itemDate.getTime() === yesterday.getTime()) {
+      return "Last seen yesterday";
+    } else {
+      const dateStr = d.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+      });
+      return `Last seen ${dateStr}`;
+    }
+  } catch (e) {
+    return "Offline";
+  }
+};
+
 const Sidebar = () => {
   const dispatch = useDispatch();
   const {
@@ -21,10 +60,32 @@ const Sidebar = () => {
     onlineUserIds,
     loading,
   } = useSelector((state) => state.users);
-  const { activeUser, unreadCounts } = useSelector((state) => state.chat);
+  const { activeUser, unreadCounts, typingUsers } = useSelector(
+    (state) => state.chat,
+  );
+
   const { user: currentUser } = useSelector((state) => state.auth);
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
-  console.log({ users });
+  const [searchContactQuery, setSearchContactQuery] = useState("");
+  const [activeMenuUserId, setActiveMenuUserId] = useState(null);
+
+  const { token, error } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      disconnectSocket();
+    }
+  }, [token, navigate]);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".contact-menu-container")) {
+        setActiveMenuUserId(null);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   const handleFriendAdded = () => {
     dispatch(fetchUsers());
@@ -34,11 +95,12 @@ const Sidebar = () => {
     dispatch(fetchUsers());
   }, [dispatch]);
 
-  console.log({ users });
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(searchContactQuery.toLowerCase()),
+  );
 
   return (
-    <div className="w-80 h-screen flex flex-col bg-[#0d0d15] border-r border-white/[0.06]">
-      {/* Header */}
+    <div className="w-full h-full flex flex-col bg-[#0d0d15]">
       <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] bg-white/[0.02]">
         <div>
           <p className="text-[15px] font-bold text-violet-50 tracking-wide max-w-[148px] truncate">
@@ -72,6 +134,33 @@ const Sidebar = () => {
           </svg>
           Logout
         </button>
+      </div>
+
+      {/* Search Input */}
+      <div className="px-5 pt-3 pb-1">
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search friends..."
+            value={searchContactQuery}
+            onChange={(e) => setSearchContactQuery(e.target.value)}
+            className="w-full pl-8 pr-4 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[12px] text-white placeholder-slate-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/[0.05] transition-all duration-200"
+          />
+        </div>
       </div>
 
       {/* Section label + count */}
@@ -141,9 +230,15 @@ const Sidebar = () => {
           </div>
         )}
 
+        {!loading && users.length > 0 && filteredUsers.length === 0 && (
+          <div className="text-center py-8 text-slate-500 text-xs">
+            No contacts match "{searchContactQuery}"
+          </div>
+        )}
+
         {!loading &&
-          users.length > 0 &&
-          users.map((user) => {
+          filteredUsers.length > 0 &&
+          filteredUsers.map((user) => {
             const isOnline = onlineUserIds.includes(String(user.id));
             const isSelected = activeUser?.id === user.id;
             const unread = unreadCounts?.[String(user.id)] || 0;
@@ -187,7 +282,6 @@ const Sidebar = () => {
                   />
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p
                     className={`text-[13.5px] font-semibold truncate ${isSelected ? "text-violet-50" : "text-slate-200"}`}
@@ -197,14 +291,89 @@ const Sidebar = () => {
                   <p
                     className={`text-[11px] mt-0.5 font-medium ${isOnline ? "text-emerald-400" : "text-slate-500"}`}
                   >
-                    {isOnline ? "● Online" : "Offline"}
+                    {typingUsers?.[String(user.id)] &&
+                    activeUser?.id !== user.id
+                      ? "Typing..."
+                      : isOnline
+                        ? "● Online"
+                        : "Offline"}
                   </p>
                 </div>
-                {!isSelected && badgeLabel && (
-                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse">
-                    {badgeLabel}
-                  </span>
-                )}
+
+                {/* Badge and options dropdown */}
+                <div className="flex items-center gap-2 contact-menu-container relative">
+                  {!isSelected && badgeLabel && (
+                    <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse">
+                      {badgeLabel}
+                    </span>
+                  )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveMenuUserId(
+                        activeMenuUserId === user.id ? null : user.id,
+                      );
+                    }}
+                    className="p-1 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-200"
+                    title="Manage contact"
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown Options */}
+                  {activeMenuUserId === user.id && (
+                    <div className="absolute right-0 top-8 z-30 min-w-[130px] rounded-2xl overflow-hidden bg-[#16161f] border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] py-1 text-left">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuUserId(null);
+                          if (
+                            confirm(
+                              `Are you sure you want to clear chat history with ${user.name}?`,
+                            )
+                          ) {
+                            dispatch(clearSidebarChat(user.id));
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 text-[12px] font-semibold text-slate-300 hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer"
+                      >
+                        Clear Chat
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuUserId(null);
+                          if (
+                            confirm(
+                              `Are you sure you want to remove ${user.name} from friends?`,
+                            )
+                          ) {
+                            dispatch(removeFriend(user.id)).then(() => {
+                              dispatch(fetchUsers());
+                            });
+                          }
+                        }}
+                        className="w-full px-4 py-2.5 text-[12px] font-semibold text-red-400 hover:bg-red-500/[0.08] transition-colors duration-150 cursor-pointer"
+                      >
+                        Remove Friend
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
