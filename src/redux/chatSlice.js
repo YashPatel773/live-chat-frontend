@@ -73,6 +73,19 @@ export const removeMemberFromGroup = createAsyncThunk(
   },
 );
 
+export const leaveGroup = createAsyncThunk(
+  "chat/leaveGroup",
+  async ({ groupId }, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/groups/${groupId}/leave`);
+      return response.data.group;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to leave group",
+      );
+    }
+  },
+);
 class TaskQueue {
   constructor() {
     this.queue = [];
@@ -293,6 +306,18 @@ export const deleteMessage = createAsyncThunk(
   },
 );
 
+export const editMessage = createAsyncThunk(
+  "chat/editMessage",
+  async ({ messageId, message }, { rejectWithValue }) => {
+    try {
+      const response = await api.put(`/messages/${messageId}`, { message });
+      return response.data.message;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to edit message");
+    }
+  },
+);
+
 const chatSlice = createSlice({
   name: "chat",
   initialState: {
@@ -304,8 +329,41 @@ const chatSlice = createSlice({
     typingUsers: {}, // key: senderId, value: boolean
     pendingQueue: [], // Track messages that are currently sending/pending
     groups: [], // Array of groups the user belongs to
+    replyingTo: null, // Message object currently being replied to
+    editingMessage: null, // Message object currently being edited
   },
   reducers: {
+    setReplyingTo: (state, action) => {
+      state.replyingTo = action.payload;
+    },
+    clearReplyingTo: (state) => {
+      state.replyingTo = null;
+    },
+    setEditingMessage: (state, action) => {
+      state.editingMessage = action.payload;
+    },
+    clearEditingMessage: (state) => {
+      state.editingMessage = null;
+    },
+    updateMessageText: (state, action) => {
+      const { messageId, message, is_edited } = action.payload;
+      const msg = state.messages.find(
+        (m) => String(m.id) === String(messageId)
+      );
+      if (msg) {
+        msg.message = message;
+        msg.is_edited = is_edited;
+      }
+    },
+    updateMessageReactions: (state, action) => {
+      const { messageId, reactions } = action.payload;
+      const msg = state.messages.find(
+        (m) => String(m.id) === String(messageId),
+      );
+      if (msg) {
+        msg.reactions = reactions;
+      }
+    },
     // Change current conversation focus target
     // setActiveUser: (state, action) => {
 
@@ -324,6 +382,8 @@ const chatSlice = createSlice({
     // },
 
     setActiveUser: (state, action) => {
+      state.replyingTo = null; // Clear active reply context when changing chat
+      state.editingMessage = null; // Clear active edit context when changing chat
       if (action.payload === null) {
         state.activeUser = null;
         state.messages = [];
@@ -479,6 +539,13 @@ const chatSlice = createSlice({
           (msg) => msg.id !== action.payload.messageId,
         );
       })
+      .addCase(editMessage.fulfilled, (state, action) => {
+        const editedMsg = action.payload;
+        const index = state.messages.findIndex((m) => String(m.id) === String(editedMsg.id));
+        if (index !== -1) {
+          state.messages[index] = editedMsg;
+        }
+      })
       .addCase(clearSidebarChat.fulfilled, (state, action) => {
         if (
           state.activeUser &&
@@ -542,6 +609,20 @@ const chatSlice = createSlice({
           String(state.activeUser.id) === String(updatedGroup.id)
         ) {
           state.activeUser = updatedGroup;
+        }
+      })
+      .addCase(leaveGroup.fulfilled, (state, action) => {
+        const { groupId } = action.meta.arg;
+        state.groups = state.groups.filter(
+          (g) => String(g.id) !== String(groupId),
+        );
+        if (
+          state.activeUser &&
+          state.activeUser.is_group &&
+          String(state.activeUser.id) === String(groupId)
+        ) {
+          state.activeUser = null;
+          state.messages = [];
         }
       })
 
@@ -631,6 +712,8 @@ const chatSlice = createSlice({
         const groupId = formData.get("group_id");
         const rawText = formData.get("message") || "";
         const hasFile = formData.has("file");
+        const replyToId = formData.get("reply_to_id"); // NEW
+        const replyToPreview = action.meta.arg.replyToPreview;
 
         const tempMsg = {
           id: tempId,
@@ -641,6 +724,8 @@ const chatSlice = createSlice({
           type: hasFile ? "media_uploading" : "text", // Helps show placeholder loading states for files
           created_at: new Date().toISOString(),
           is_seen: false,
+          reply_to_id: replyToId || null,
+          reply_to: replyToPreview || null,
           status: "pending",
         };
 
@@ -702,5 +787,11 @@ export const {
   addGroup,
   updateGroup,
   removeGroup,
+  setReplyingTo,
+  clearReplyingTo,
+  updateMessageReactions,
+  setEditingMessage,
+  clearEditingMessage,
+  updateMessageText,
 } = chatSlice.actions;
 export default chatSlice.reducer;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { addMemberToGroup, removeMemberFromGroup } from "../redux/chatSlice";
+import { addMemberToGroup, removeMemberFromGroup, leaveGroup } from "../redux/chatSlice";
 import { getSocket } from "../services/socket";
 
 const ManageMembersModal = ({ isOpen, onClose, group }) => {
@@ -93,6 +93,34 @@ const ManageMembersModal = ({ isOpen, onClose, group }) => {
         }
       } else {
         setErrorMsg(actionResult.payload || "Failed to remove member.");
+      }
+    } catch (err) {
+      setErrorMsg("An unexpected error occurred.");
+      console.error(err);
+    } finally {
+      setLoadingMemberId(null);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm("Are you sure you want to leave this group?")) return;
+    setLoadingMemberId(group.id);
+    setErrorMsg("");
+    try {
+      const actionResult = await dispatch(leaveGroup({ groupId: group.id }));
+      if (leaveGroup.fulfilled.match(actionResult)) {
+        const responseData = actionResult.payload;
+        // Emit Socket event to sync removals real-time
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("updateGroup", {
+            group: responseData.group,
+            removedMemberId: currentUser.id,
+          });
+        }
+        onClose();
+      } else {
+        setErrorMsg(actionResult.payload || "Failed to leave group.");
       }
     } catch (err) {
       setErrorMsg("An unexpected error occurred.");
@@ -214,6 +242,32 @@ const ManageMembersModal = ({ isOpen, onClose, group }) => {
       {errorMsg && (
         <div className="text-red-400 text-xs font-semibold px-1 mt-2 mb-2 flex-shrink-0">
           {errorMsg}
+        </div>
+      )}
+
+      {!isAdmin && (
+        <div className="pt-4 border-t border-white/[0.06] flex justify-end flex-shrink-0">
+          <button
+            onClick={handleLeaveGroup}
+            disabled={loadingMemberId !== null}
+            className="w-full py-2.5 rounded-2xl bg-rose-500/[0.08] hover:bg-rose-500/[0.16] border border-rose-500/20 hover:border-rose-500/40 text-rose-400 font-semibold text-[13px] transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {loadingMemberId === group.id ? "Leaving Group..." : "Leave Group"}
+          </button>
         </div>
       )}
     </div>

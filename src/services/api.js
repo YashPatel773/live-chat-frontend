@@ -48,7 +48,6 @@ api.interceptors.request.use(
         // Token expired
         if (payload.exp && payload.exp < now) {
           localStorage.removeItem("chat_token");
-          window.location.href = "/login";
           return Promise.reject(new Error("Token expired"));
         }
 
@@ -67,7 +66,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isAuthEndpoint =
+      error.config?.url?.endsWith("/login") ||
+      error.config?.url?.endsWith("/register");
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("chat_token");
       window.location.href = "/login";
     }
