@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { deleteMessage, removeMessage, fetchMessages } from "../redux/chatSlice";
+import { deleteMessage, removeMessage, fetchMessages, setReplyingTo, updateMessageReactions, setEditingMessage } from "../redux/chatSlice";
 import { getSocket } from "../services/socket";
+import api from "../services/api";
 
 const getMemberDisplayName = (member, friends, currentUserId) => {
   if (!member) return "";
@@ -156,6 +157,109 @@ const MessageList = () => {
     }
   };
 
+  const handleReact = async (emoji) => {
+    if (!contextMenu) return;
+    const { messageId } = contextMenu;
+    const isGroup = activeUser?.is_group;
+    setContextMenu(null);
+
+    try {
+      const response = await api.post(`/messages/${messageId}/react`, { reaction: emoji });
+      if (response.data.success) {
+        const updatedReactions = response.data.reactions;
+        dispatch(updateMessageReactions({ messageId, reactions: updatedReactions }));
+
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("messageReaction", {
+            message_id: messageId,
+            receiver_id: isGroup ? null : activeUser.id,
+            group_id: isGroup ? activeUser.id : null,
+            reactions: updatedReactions,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to react to message:", err);
+    }
+  };
+
+  const handleReactionClick = async (emoji, messageId) => {
+    const isGroup = activeUser?.is_group;
+    try {
+      const response = await api.post(`/messages/${messageId}/react`, { reaction: emoji });
+      if (response.data.success) {
+        const updatedReactions = response.data.reactions;
+        dispatch(updateMessageReactions({ messageId, reactions: updatedReactions }));
+
+        const socket = getSocket();
+        if (socket) {
+          socket.emit("messageReaction", {
+            message_id: messageId,
+            receiver_id: isGroup ? null : activeUser.id,
+            group_id: isGroup ? activeUser.id : null,
+            reactions: updatedReactions,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to toggle reaction:", err);
+    }
+  };
+
+  const scrollToMessage = (targetId) => {
+    const element = document.getElementById(`msg-bubble-${targetId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.classList.add("ring-2", "ring-violet-500", "ring-offset-2", "ring-offset-slate-900");
+      setTimeout(() => {
+        element.classList.remove("ring-2", "ring-violet-500", "ring-offset-2", "ring-offset-slate-900");
+      }, 2000);
+    }
+  };
+
+  const renderReactions = (reactions, messageId) => {
+    if (!reactions || reactions.length === 0) return null;
+    
+    // Group reactions by emoji
+    const groups = {};
+    reactions.forEach(r => {
+      if (!groups[r.reaction]) {
+        groups[r.reaction] = [];
+      }
+      groups[r.reaction].push(r.user?.name || "Someone");
+    });
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1.5 select-none">
+        {Object.entries(groups).map(([emoji, users]) => {
+          const hasReacted = reactions.some(
+            (r) => String(r.user_id) === String(currentUser?.id) && r.reaction === emoji
+          );
+          return (
+            <div
+              key={emoji}
+              title={users.join(", ")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReactionClick(emoji, messageId);
+              }}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs cursor-pointer border transition-all duration-150
+                ${
+                  hasReacted
+                    ? "bg-violet-500/25 border-violet-500/40 text-violet-200 shadow-[0_0_5px_rgba(139,92,246,0.2)]"
+                    : "bg-white/[0.03] border-white/[0.06] text-slate-400 hover:bg-white/[0.08]"
+                }`}
+            >
+              <span>{emoji}</span>
+              <span className="text-[10px] font-bold">{users.length}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const grouped = [];
   let lastDate = null;
   messages.forEach((msg) => {
@@ -215,6 +319,7 @@ const MessageList = () => {
         return (
           <div
             key={msg.id}
+            id={`msg-bubble-${msg.id}`}
             className={`flex flex-col ${isSentByMe ? "items-end" : "items-start"} mb-1`}
             onContextMenu={(e) => handleContextMenu(e, msg)}
           >
@@ -231,7 +336,22 @@ const MessageList = () => {
                     : "bg-white/[0.05] text-slate-200 border border-white/[0.07] rounded-[18px] rounded-bl-[4px]"
                 }`}
             >
-              {/* <p>{msg.message}</p> */}
+              {msg.reply_to && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    scrollToMessage(msg.reply_to.id);
+                  }}
+                  className="mb-2 px-3 py-1.5 rounded-lg text-xs border-l-2 bg-black/35 border-violet-400 cursor-pointer hover:bg-black/50 transition-all duration-150 text-left select-none max-w-full"
+                >
+                  <div className="font-bold text-violet-300 truncate">
+                    {String(msg.reply_to.sender_id) === String(currentUser?.id) ? "You" : msg.reply_to.sender?.name || "User"}
+                  </div>
+                  <div className="text-slate-300 truncate max-w-[300px] mt-0.5">
+                    {msg.reply_to.message || (msg.reply_to.type === "image" ? "📷 Image" : "📎 Attachment")}
+                  </div>
+                </div>
+              )}
               <p>
                 {msg.type === "image" && msg.file_path && (
                   <img
@@ -257,7 +377,16 @@ const MessageList = () => {
 
                 {msg.message && <p>{msg.message}</p>}
               </p>
-              <div className="flex items-center justify-end gap-1 mt-1">
+              <div className="flex items-center justify-end gap-1.5 mt-1">
+                {!!msg.is_edited && (
+                  <span
+                    className={`text-[9px] font-medium opacity-65 select-none ${
+                      isSentByMe ? "text-violet-200" : "text-slate-500"
+                    }`}
+                  >
+                    edited
+                  </span>
+                )}
                 <span
                   className={`text-[10px] ${isSentByMe ? "text-violet-200/70" : "text-slate-500"}`}
                 >
@@ -297,6 +426,7 @@ const MessageList = () => {
                     </span>
                   ))}
               </div>
+              {renderReactions(msg.reactions, msg.id)}
             </div>
           </div>
         );
@@ -328,15 +458,100 @@ const MessageList = () => {
       {contextMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[180px] rounded-2xl overflow-hidden
+          className="fixed z-50 min-w-[200px] rounded-2xl overflow-hidden
             bg-[#16161f] border border-white/[0.08]
             shadow-[0_8px_32px_rgba(0,0,0,0.6)]
             animate-in fade-in zoom-in-95 duration-150"
           style={{
-            top: Math.min(contextMenu.y, window.innerHeight - 140),
-            left: Math.min(contextMenu.x, window.innerWidth - 200),
+            top: Math.min(contextMenu.y, window.innerHeight - 200),
+            left: Math.min(contextMenu.x, window.innerWidth - 220),
           }}
         >
+          {/* Reaction Bar */}
+          <div className="flex items-center justify-between px-3 py-2 bg-white/[0.02] border-b border-white/[0.06]">
+            {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => handleReact(emoji)}
+                className="text-lg hover:scale-125 transition-transform duration-100 p-1 active:scale-95"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+
+          {/* Reply Option */}
+          <button
+            onClick={() => {
+              const msg = messages.find(m => m.id === contextMenu.messageId);
+              if (msg) {
+                dispatch(setReplyingTo(msg));
+              }
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-medium text-slate-200
+              hover:bg-white/[0.05] transition-colors duration-150 text-left"
+          >
+            {/* Reply icon */}
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-slate-400 flex-shrink-0"
+            >
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+            </svg>
+            Reply
+          </button>
+
+          {/* Edit Option — Only for sender & only for text messages */}
+          {contextMenu.isMine && (() => {
+            const msg = messages.find(m => m.id === contextMenu.messageId);
+            return msg && msg.type === "text";
+          })() && (
+            <>
+              {/* Divider */}
+              <div className="h-px bg-white/[0.05] mx-3" />
+              <button
+                onClick={() => {
+                  const msg = messages.find(m => m.id === contextMenu.messageId);
+                  if (msg) {
+                    dispatch(setEditingMessage(msg));
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-medium text-slate-200
+                  hover:bg-white/[0.05] transition-colors duration-150 text-left"
+              >
+                {/* Pencil / Edit icon */}
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-slate-400 flex-shrink-0"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+                Edit message
+              </button>
+            </>
+          )}
+
+          {/* Divider */}
+          <div className="h-px bg-white/[0.05] mx-3" />
+
           {/* Delete for me — always available */}
           <button
             onClick={() => handleDelete("me")}

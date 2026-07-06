@@ -4,16 +4,11 @@ import api from "../services/api";
 // 1. ASYNC ACTION: Load historical conversation data from MySQL
 export const fetchMessages = createAsyncThunk(
   "chat/fetchMessages",
-  async ({ id, isGroup, cursor }, { rejectWithValue }) => {
+  async ({ id, isGroup }, { rejectWithValue }) => {
     try {
       const url = isGroup ? `/groups/${id}/messages` : `/messages/${id}`;
-      const response = await api.get(url, { params: { cursor } });
-      return {
-        messages: response.data.messages,
-        nextCursor: response.data.next_cursor,
-        hasMore: response.data.has_more,
-        isPagination: !!cursor,
-      };
+      const response = await api.get(url);
+      return response.data.messages;
     } catch (error) {
       return rejectWithValue(
         error.response?.data || "Failed to load chat history",
@@ -336,9 +331,6 @@ const chatSlice = createSlice({
     groups: [], // Array of groups the user belongs to
     replyingTo: null, // Message object currently being replied to
     editingMessage: null, // Message object currently being edited
-    nextCursor: null,
-    hasMore: false,
-    isPaginationLoading: false,
   },
   reducers: {
     setReplyingTo: (state, action) => {
@@ -392,9 +384,6 @@ const chatSlice = createSlice({
     setActiveUser: (state, action) => {
       state.replyingTo = null; // Clear active reply context when changing chat
       state.editingMessage = null; // Clear active edit context when changing chat
-      state.nextCursor = null;
-      state.hasMore = false;
-      state.isPaginationLoading = false;
       if (action.payload === null) {
         state.activeUser = null;
         state.messages = [];
@@ -637,37 +626,23 @@ const chatSlice = createSlice({
         }
       })
 
-      .addCase(fetchMessages.pending, (state, action) => {
-        if (action.meta.arg.cursor) {
-          state.isPaginationLoading = true;
-        } else {
-          state.loading = true;
-        }
+      .addCase(fetchMessages.pending, (state) => {
+        state.loading = true;
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         state.loading = false;
-        state.isPaginationLoading = false;
-        const fetchedData = action.payload || { messages: [], nextCursor: null, hasMore: false, isPagination: false };
-        const fetchedMessages = fetchedData.messages || [];
-
-        if (fetchedData.isPagination) {
-          state.messages = [...fetchedMessages, ...state.messages];
-        } else {
-          const pendingForActiveUser = (state.pendingQueue || []).filter(
-            (msg) =>
-              state.activeUser &&
-              (state.activeUser.is_group
-                ? String(msg.group_id) === String(state.activeUser.id)
-                : String(msg.receiver_id) === String(state.activeUser.id)),
-          );
-          state.messages = [...fetchedMessages, ...pendingForActiveUser];
-        }
-        state.nextCursor = fetchedData.nextCursor;
-        state.hasMore = fetchedData.hasMore;
+        const fetchedMessages = action.payload || [];
+        const pendingForActiveUser = (state.pendingQueue || []).filter(
+          (msg) =>
+            state.activeUser &&
+            (state.activeUser.is_group
+              ? String(msg.group_id) === String(state.activeUser.id)
+              : String(msg.receiver_id) === String(state.activeUser.id)),
+        );
+        state.messages = [...fetchedMessages, ...pendingForActiveUser];
       })
       .addCase(fetchMessages.rejected, (state) => {
         state.loading = false;
-        state.isPaginationLoading = false;
       })
 
       // .addCase(sendNewMessage.pending, (state, action) => {

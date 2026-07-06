@@ -50,24 +50,74 @@ const MessageList = () => {
 
   const scrollHeightBeforeLoadRef = useRef(0);
   const shouldAdjustScrollRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const lastScrollTimeRef = useRef(Date.now());
+  const isStoppingRef = useRef(false);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
+    const currentScrollTop = container.scrollTop;
+    const currentTime = Date.now();
+
+    const timeDiff = currentTime - lastScrollTimeRef.current;
+    let velocity = 0;
+    if (timeDiff > 0) {
+      const deltaY = lastScrollTopRef.current - currentScrollTop;
+      velocity = deltaY / timeDiff; // pixels per millisecond
+    }
+
+    // Keep track of scroll position and time for subsequent scroll events
+    const lastScrollTop = lastScrollTopRef.current;
+    lastScrollTopRef.current = currentScrollTop;
+    lastScrollTimeRef.current = currentTime;
+
+    // We only care about scrolling UP (where currentScrollTop is less than lastScrollTop)
+    if (currentScrollTop >= lastScrollTop) {
+      return;
+    }
+
     if (
-      container.scrollTop === 0 &&
       hasMore &&
       !isPaginationLoading &&
-      !loading
+      !loading &&
+      !isStoppingRef.current
     ) {
-      scrollHeightBeforeLoadRef.current = container.scrollHeight;
-      shouldAdjustScrollRef.current = true;
-      dispatch(
-        fetchMessages({
-          id: activeUser.id,
-          isGroup: activeUser.is_group,
-          cursor: nextCursor,
-        }),
-      );
+      const VELOCITY_THRESHOLD = 1.2;
+
+      if (currentScrollTop < 100 && velocity > VELOCITY_THRESHOLD) {
+        // Fast scroll detected: Stop momentum, show loader, load messages
+        isStoppingRef.current = true;
+        container.style.overflowY = "hidden";
+
+        scrollHeightBeforeLoadRef.current = container.scrollHeight;
+        shouldAdjustScrollRef.current = true;
+
+        dispatch(
+          fetchMessages({
+            id: activeUser.id,
+            isGroup: activeUser.is_group,
+            cursor: nextCursor,
+          })
+        ).finally(() => {
+          // Restore overflow-y to auto after state updates, letting scroll resume
+          setTimeout(() => {
+            container.style.overflowY = "auto";
+            isStoppingRef.current = false;
+          }, 100);
+        });
+      } else if (currentScrollTop <= 10) {
+        // Slow scroll detected: Smooth load when hitting the absolute top (no stop)
+        scrollHeightBeforeLoadRef.current = container.scrollHeight;
+        shouldAdjustScrollRef.current = true;
+
+        dispatch(
+          fetchMessages({
+            id: activeUser.id,
+            isGroup: activeUser.is_group,
+            cursor: nextCursor,
+          })
+        );
+      }
     }
   };
 
