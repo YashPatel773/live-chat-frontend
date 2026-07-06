@@ -34,6 +34,41 @@ const Chat = () => {
     usersRef.current = users;
   }, [users]);
 
+  // Lock body, html and #root scroll behavior on mount to prevent outer scrolling on mobile
+  useEffect(() => {
+    const rootEl = document.getElementById("root");
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyHeight = document.body.style.height;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalHtmlHeight = document.documentElement.style.height;
+    let originalRootHeight = "";
+    let originalRootOverflow = "";
+    if (rootEl) {
+      originalRootHeight = rootEl.style.height;
+      originalRootOverflow = rootEl.style.overflow;
+    }
+
+    document.body.style.overflow = "hidden";
+    document.body.style.height = "100%";
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.height = "100%";
+    if (rootEl) {
+      rootEl.style.height = "100%";
+      rootEl.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.height = originalBodyHeight;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.style.height = originalHtmlHeight;
+      if (rootEl) {
+        rootEl.style.height = originalRootHeight;
+        rootEl.style.overflow = originalRootOverflow;
+      }
+    };
+  }, []);
+
   // Fetch groups on mount
   useEffect(() => {
     if (user) {
@@ -175,7 +210,7 @@ const Chat = () => {
   }, [user, dispatch]);
 
   return (
-    <div className="w-full h-screen overflow-hidden flex bg-[#0a0a10] select-none">
+    <div className="w-full h-screen h-[100dvh] overflow-hidden flex bg-[#0a0a10] select-none">
       {/* Sidebar Wrapper */}
       <div
         className={`w-full md:w-80 h-full flex-shrink-0 flex flex-col border-r border-white/[0.06] ${

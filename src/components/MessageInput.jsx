@@ -11,6 +11,7 @@ const MessageInput = () => {
   
   const dispatch = useDispatch();
   const fileInputRef = useRef(null);
+  const inputRef = useRef(null);
 
   const { activeUser, replyingTo, editingMessage } = useSelector((state) => state.chat);
   const { user: currentUser } = useSelector((state) => state.auth);
@@ -96,6 +97,11 @@ const MessageInput = () => {
       dispatch(clearEditingMessage());
       setText("");
       setShowEmoji(false);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 50);
       return;
     }
 
@@ -149,6 +155,11 @@ const MessageInput = () => {
     setSelectedFile(null);
     setShowEmoji(false);
     dispatch(clearReplyingTo());
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 50);
   };
 
   const handleKeyDown = (e) => {
@@ -268,6 +279,7 @@ const MessageInput = () => {
 
         {/* Main Text Input */}
         <input
+          ref={inputRef}
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
