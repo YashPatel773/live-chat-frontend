@@ -1,6 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { deleteMessage, removeMessage, fetchMessages, setReplyingTo, updateMessageReactions, setEditingMessage } from "../redux/chatSlice";
+import {
+  deleteMessage,
+  removeMessage,
+  fetchMessages,
+  setReplyingTo,
+  updateMessageReactions,
+  setEditingMessage,
+} from "../redux/chatSlice";
 import { getSocket } from "../services/socket";
 import api from "../services/api";
 
@@ -11,11 +18,7 @@ const getMemberDisplayName = (member, friends, currentUserId) => {
   return isFriend ? member.name : member.email;
 };
 
-const STORAGE_BASE_URL = import.meta.env.VITE_API_URL?.replace(
-  /\/api\/?$/,
-  "",
-);
-
+const STORAGE_BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "");
 
 const getFileUrl = (filePath) => {
   if (!filePath) return null;
@@ -76,12 +79,7 @@ const MessageList = () => {
       return;
     }
 
-    if (
-      hasMore &&
-      !isPaginationLoading &&
-      !loading &&
-      !isStoppingRef.current
-    ) {
+    if (hasMore && !isPaginationLoading && !loading && !isStoppingRef.current) {
       const VELOCITY_THRESHOLD = 1.2;
 
       if (currentScrollTop < 100 && velocity > VELOCITY_THRESHOLD) {
@@ -97,7 +95,7 @@ const MessageList = () => {
             id: activeUser.id,
             isGroup: activeUser.is_group,
             cursor: nextCursor,
-          })
+          }),
         ).finally(() => {
           // Restore overflow-y to auto after state updates, letting scroll resume
           setTimeout(() => {
@@ -115,7 +113,7 @@ const MessageList = () => {
             id: activeUser.id,
             isGroup: activeUser.is_group,
             cursor: nextCursor,
-          })
+          }),
         );
       }
     }
@@ -126,13 +124,39 @@ const MessageList = () => {
     const container = containerRef.current;
 
     if (shouldAdjustScrollRef.current) {
-      container.scrollTop = container.scrollHeight - scrollHeightBeforeLoadRef.current;
+      container.scrollTop =
+        container.scrollHeight - scrollHeightBeforeLoadRef.current;
       shouldAdjustScrollRef.current = false;
     } else {
       container.scrollTop = container.scrollHeight;
     }
   }, [messages]);
 
+  useLayoutEffect(() => {
+    if (!contextMenu || !menuRef.current) return;
+
+    const menu = menuRef.current;
+    const rect = menu.getBoundingClientRect();
+    const padding = 8;
+
+    let top = contextMenu.y;
+    let left = contextMenu.x;
+
+    // Flip above the cursor if it doesn't fit below
+    if (top + rect.height > window.innerHeight - padding) {
+      top = Math.max(padding, contextMenu.y - rect.height);
+    }
+    // Clamp horizontally
+    if (left + rect.width > window.innerWidth - padding) {
+      left = Math.max(padding, window.innerWidth - rect.width - padding);
+    }
+    if (top < padding) top = padding;
+    if (left < padding) left = padding;
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.visibility = "visible";
+  }, [contextMenu]);
   // Close context menu on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -214,10 +238,14 @@ const MessageList = () => {
     setContextMenu(null);
 
     try {
-      const response = await api.post(`/messages/${messageId}/react`, { reaction: emoji });
+      const response = await api.post(`/messages/${messageId}/react`, {
+        reaction: emoji,
+      });
       if (response.data.success) {
         const updatedReactions = response.data.reactions;
-        dispatch(updateMessageReactions({ messageId, reactions: updatedReactions }));
+        dispatch(
+          updateMessageReactions({ messageId, reactions: updatedReactions }),
+        );
 
         const socket = getSocket();
         if (socket) {
@@ -237,10 +265,14 @@ const MessageList = () => {
   const handleReactionClick = async (emoji, messageId) => {
     const isGroup = activeUser?.is_group;
     try {
-      const response = await api.post(`/messages/${messageId}/react`, { reaction: emoji });
+      const response = await api.post(`/messages/${messageId}/react`, {
+        reaction: emoji,
+      });
       if (response.data.success) {
         const updatedReactions = response.data.reactions;
-        dispatch(updateMessageReactions({ messageId, reactions: updatedReactions }));
+        dispatch(
+          updateMessageReactions({ messageId, reactions: updatedReactions }),
+        );
 
         const socket = getSocket();
         if (socket) {
@@ -261,30 +293,42 @@ const MessageList = () => {
     const element = document.getElementById(`msg-bubble-${targetId}`);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
-      element.classList.add("ring-2", "ring-violet-500", "ring-offset-2", "ring-offset-slate-900");
+      element.classList.add(
+        "ring-2",
+        "ring-violet-500",
+        "ring-offset-2",
+        "ring-offset-slate-900",
+      );
       setTimeout(() => {
-        element.classList.remove("ring-2", "ring-violet-500", "ring-offset-2", "ring-offset-slate-900");
+        element.classList.remove(
+          "ring-2",
+          "ring-violet-500",
+          "ring-offset-2",
+          "ring-offset-slate-900",
+        );
       }, 2000);
     }
   };
 
   const renderReactions = (reactions, messageId) => {
     if (!reactions || reactions.length === 0) return null;
-    
+
     // Group reactions by emoji
     const groups = {};
-    reactions.forEach(r => {
+    reactions.forEach((r) => {
       if (!groups[r.reaction]) {
         groups[r.reaction] = [];
       }
       groups[r.reaction].push(r.user?.name || "Someone");
     });
-    
+
     return (
       <div className="flex flex-wrap gap-1 mt-1.5 select-none">
         {Object.entries(groups).map(([emoji, users]) => {
           const hasReacted = reactions.some(
-            (r) => String(r.user_id) === String(currentUser?.id) && r.reaction === emoji
+            (r) =>
+              String(r.user_id) === String(currentUser?.id) &&
+              r.reaction === emoji,
           );
           return (
             <div
@@ -395,10 +439,15 @@ const MessageList = () => {
                   className="mb-2 px-3 py-1.5 rounded-lg text-xs border-l-2 bg-black/35 border-violet-400 cursor-pointer hover:bg-black/50 transition-all duration-150 text-left select-none max-w-full"
                 >
                   <div className="font-bold text-violet-300 truncate">
-                    {String(msg.reply_to.sender_id) === String(currentUser?.id) ? "You" : msg.reply_to.sender?.name || "User"}
+                    {String(msg.reply_to.sender_id) === String(currentUser?.id)
+                      ? "You"
+                      : msg.reply_to.sender?.name || "User"}
                   </div>
                   <div className="text-slate-300 truncate max-w-[300px] mt-0.5">
-                    {msg.reply_to.message || (msg.reply_to.type === "image" ? "📷 Image" : "📎 Attachment")}
+                    {msg.reply_to.message ||
+                      (msg.reply_to.type === "image"
+                        ? "📷 Image"
+                        : "📎 Attachment")}
                   </div>
                 </div>
               )}
@@ -444,7 +493,7 @@ const MessageList = () => {
                 </span>
                 {isSentByMe &&
                   (msg.status === "pending" ||
-                  String(msg.id).startsWith("temp-") ? ( 
+                  String(msg.id).startsWith("temp-") ? (
                     <span
                       title="Sending..."
                       className="text-violet-300/60 flex items-center justify-center animate-pulse"
@@ -512,9 +561,14 @@ const MessageList = () => {
             bg-[#16161f] border border-white/[0.08]
             shadow-[0_8px_32px_rgba(0,0,0,0.6)]
             animate-in fade-in zoom-in-95 duration-150"
+          // style={{
+          //   top: Math.min(contextMenu.y, window.innerHeight - 200),
+          //   left: Math.min(contextMenu.x, window.innerWidth - 220),
+          // }}
           style={{
-            top: Math.min(contextMenu.y, window.innerHeight - 200),
-            left: Math.min(contextMenu.x, window.innerWidth - 220),
+            top: contextMenu.y,
+            left: contextMenu.x,
+            visibility: contextMenu.positioned ? "visible" : "hidden",
           }}
         >
           {/* Reaction Bar */}
@@ -533,7 +587,7 @@ const MessageList = () => {
           {/* Reply Option */}
           <button
             onClick={() => {
-              const msg = messages.find(m => m.id === contextMenu.messageId);
+              const msg = messages.find((m) => m.id === contextMenu.messageId);
               if (msg) {
                 dispatch(setReplyingTo(msg));
               }
@@ -561,43 +615,46 @@ const MessageList = () => {
           </button>
 
           {/* Edit Option — Only for sender & only for text messages */}
-          {contextMenu.isMine && (() => {
-            const msg = messages.find(m => m.id === contextMenu.messageId);
-            return msg && msg.type === "text";
-          })() && (
-            <>
-              {/* Divider */}
-              <div className="h-px bg-white/[0.05] mx-3" />
-              <button
-                onClick={() => {
-                  const msg = messages.find(m => m.id === contextMenu.messageId);
-                  if (msg) {
-                    dispatch(setEditingMessage(msg));
-                  }
-                  setContextMenu(null);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-medium text-slate-200
+          {contextMenu.isMine &&
+            (() => {
+              const msg = messages.find((m) => m.id === contextMenu.messageId);
+              return msg && msg.type === "text";
+            })() && (
+              <>
+                {/* Divider */}
+                <div className="h-px bg-white/[0.05] mx-3" />
+                <button
+                  onClick={() => {
+                    const msg = messages.find(
+                      (m) => m.id === contextMenu.messageId,
+                    );
+                    if (msg) {
+                      dispatch(setEditingMessage(msg));
+                    }
+                    setContextMenu(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-medium text-slate-200
                   hover:bg-white/[0.05] transition-colors duration-150 text-left"
-              >
-                {/* Pencil / Edit icon */}
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-slate-400 flex-shrink-0"
                 >
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                </svg>
-                Edit message
-              </button>
-            </>
-          )}
+                  {/* Pencil / Edit icon */}
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-400 flex-shrink-0"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </svg>
+                  Edit message
+                </button>
+              </>
+            )}
 
           {/* Divider */}
           <div className="h-px bg-white/[0.05] mx-3" />
@@ -658,9 +715,7 @@ const MessageList = () => {
               Delete for everyone
             </button>
           ) : (
-            <div className="px-4 py-3 text-[12px] text-slate-600 italic select-none">
-              Only sender can unsend
-            </div>
+            <></>
           )}
         </div>
       )}
