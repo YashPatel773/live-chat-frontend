@@ -57,18 +57,20 @@ const ChatWindow = () => {
     typingUsers,
     groups,
   } = useSelector((state) => state.chat);
-console.log({groups});
-console.log({selectedUser});
+  console.log({ groups });
+  console.log({ selectedUser });
 
   const { user } = useSelector((state) => state.auth);
   const { onlineUserIds, list: users } = useSelector((state) => state.users);
- 
+
   const activeUser = selectedUser
     ? selectedUser.is_group
-      ? groups.find((g) => String(g.id) === String(selectedUser.id)) || selectedUser
-      : users.find((u) => String(u.id) === String(selectedUser.id)) || selectedUser
+      ? groups.find((g) => String(g.id) === String(selectedUser.id)) ||
+        selectedUser
+      : users.find((u) => String(u.id) === String(selectedUser.id)) ||
+        selectedUser
     : null;
-console.log({activeUser});
+  console.log({ activeUser });
 
   useEffect(() => {
     if (selectedUser) {
@@ -76,13 +78,21 @@ console.log({activeUser});
         fetchMessages({
           id: selectedUser.id,
           isGroup: selectedUser.is_group,
-        })
+        }),
       );
     }
   }, [selectedUser, dispatch]);
 
   useEffect(() => {
     if (!activeUser || !user || activeUser.is_group) return;
+
+    // Only dispatch markAsSeen if there are unread incoming messages from the active friend
+    const hasUnreadIncoming = messages.some(
+      (msg) => String(msg.sender_id) === String(activeUser.id) && !msg.is_seen,
+    );
+
+    if (!hasUnreadIncoming) return;
+
     console.log(
       "[ChatWindow] useEffect triggered for seen. activeUser:",
       activeUser.id,
@@ -105,7 +115,9 @@ console.log({activeUser});
   }, [activeUser, messages, user, dispatch]);
 
   const isActiveUserOnline =
-    activeUser && !activeUser.is_group && onlineUserIds?.includes(String(activeUser.id));
+    activeUser &&
+    !activeUser.is_group &&
+    onlineUserIds?.includes(String(activeUser.id));
 
   /* ── Empty state ── */
   if (!activeUser) {
@@ -179,7 +191,9 @@ console.log({activeUser});
 
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-[13px] bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white font-bold text-[14px]">
-              {activeUser.is_group ? "👥" : activeUser.name.charAt(0).toUpperCase()}
+              {activeUser.is_group
+                ? "👥"
+                : activeUser.name.charAt(0).toUpperCase()}
             </div>
             {!activeUser.is_group && (
               <span
@@ -240,7 +254,7 @@ console.log({activeUser});
           </button>
         )}
       </div>
- 
+
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div className="w-8 h-8 rounded-full border-2 border-violet-500/20 border-t-violet-500 animate-spin" />

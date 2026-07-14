@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { fetchMessages, markAsSeen, setActiveUser } from "../redux/chatSlice";
+import ManageMembersModal from "./ManageMembersModal";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import { getSocket } from "../services/socket";
@@ -48,6 +49,7 @@ const getMemberDisplayName = (member, friends, currentUserId) => {
 
 const ChatWindow = () => {
   const dispatch = useDispatch();
+  const [isManageOpen, setIsManageOpen] = useState(false);
   const {
     activeUser: selectedUser,
     loading,
@@ -55,16 +57,18 @@ const ChatWindow = () => {
     typingUsers,
     groups,
   } = useSelector((state) => state.chat);
+console.log({groups});
+console.log({selectedUser});
 
   const { user } = useSelector((state) => state.auth);
   const { onlineUserIds, list: users } = useSelector((state) => state.users);
-
-  // Resolve activeUser dynamically to keep status/last_seen synced in real-time
+ 
   const activeUser = selectedUser
     ? selectedUser.is_group
       ? groups.find((g) => String(g.id) === String(selectedUser.id)) || selectedUser
       : users.find((u) => String(u.id) === String(selectedUser.id)) || selectedUser
     : null;
+console.log({activeUser});
 
   useEffect(() => {
     if (selectedUser) {
@@ -212,7 +216,29 @@ const ChatWindow = () => {
           </div>
         </div>
 
-        
+        {activeUser.is_group && (
+          <button
+            onClick={() => setIsManageOpen(true)}
+            className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-slate-400 hover:text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-all duration-200 flex items-center justify-center cursor-pointer"
+            title="Manage Group Members"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </button>
+        )}
       </div>
  
       {loading ? (
@@ -227,6 +253,12 @@ const ChatWindow = () => {
       )}
 
       <MessageInput />
+
+      <ManageMembersModal
+        isOpen={isManageOpen}
+        onClose={() => setIsManageOpen(false)}
+        group={activeUser}
+      />
     </div>
   );
 };
